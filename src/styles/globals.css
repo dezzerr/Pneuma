@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm off-white "breath" palette */
+    --background: 40 20% 96%;
+    --foreground: 30 6% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 6% 15%;
+    --primary: 142 40% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 14% 92%;
+    --secondary-foreground: 30 6% 25%;
+    --muted: 40 12% 90%;
+    --muted-foreground: 30 4% 45%;
+    --accent: 142 30% 94%;
+    --accent-foreground: 142 40% 30%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 12% 88%;
+    --input: 40 12% 90%;
+    --ring: 142 40% 45%;
+    --radius: 1rem;
+    --surface: 40 16% 93%;
+    --surface-foreground: 30 6% 15%;
+
+    /* Semantic utility colors */
+    --success: 142 40% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 80% 55%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 60% 55%;
+    --info-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Custom scrollbar — softer and rounded */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Utility: subtle panel shadow */
+.shadow-panel {
+  box-shadow: 0 2px 16px rgba(60, 55, 45, 0.06);
+}

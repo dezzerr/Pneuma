@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Pneuma",
+  "version": "0.1.0",
+  "identifier": "com.pneuma.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "operator",
+        "title": "Pneuma — Operator Control",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "url": "operator.html"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "../resources/seed_kjv.sql": "seed_kjv.sql",
+      "../resources/bible_embeddings.parquet": "bible_embeddings.parquet",
+      "../resources/models/all-MiniLM-L6-v2": "models/all-MiniLM-L6-v2",
+      "../sidecar/dist/pneuma-sidecar": "pneuma-sidecar"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {}
+}

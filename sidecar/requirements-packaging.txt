@@ -1,0 +1,5 @@
+# Packaging-only dependencies (not needed for dev runtime).
+# Install into the sidecar venv before building:
+#   sidecar/.venv/bin/pip install -r sidecar/requirements-packaging.txt
+
+pyinstaller>=6.0

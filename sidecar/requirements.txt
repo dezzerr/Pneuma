@@ -1,0 +1,10 @@
+# Pneuma Python sidecar dependencies
+# Target interpreter: CPython 3.11 (ctranslate2/faster-whisper wheels)
+
+faster-whisper>=1.0.3
+websockets>=12.0
+numpy>=1.26,<2.0
+onnxruntime>=1.17
+tokenizers>=0.15
+lancedb>=0.6,<0.13
+pyarrow>=14

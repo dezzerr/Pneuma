@@ -1,0 +1,17 @@
+# Secrets
+src-tauri/api_bible_key.txt
+
+# Rust
+src-tauri/target/
+
+# Node
+node_modules/
+dist/
+
+# Python
+sidecar/.venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
