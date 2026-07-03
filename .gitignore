@@ -10,8 +10,14 @@ dist/
 
 # Python
 sidecar/.venv/
+sidecar/build/
+sidecar/dist/
 __pycache__/
 *.pyc
+
+# Build artifacts
+*.tsbuildinfo
+vite.config.d.ts
 
 # OS
 .DS_Store
