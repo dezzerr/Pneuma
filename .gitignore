@@ -15,6 +15,9 @@ sidecar/dist/
 __pycache__/
 *.pyc
 
+# Large model files (use Git LFS or download scripts instead)
+resources/models/all-MiniLM-L6-v2/_st_export/model.safetensors
+
 # Build artifacts
 *.tsbuildinfo
 vite.config.d.ts
