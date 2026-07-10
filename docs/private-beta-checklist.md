@@ -49,3 +49,4 @@ marketplace, and NDI are not part of this beta.
   screenshot or screen recording for any failure.
 - Classify any stuck live output, lost verse data, unrecoverable microphone
   failure, or inability to recover the presentation window as release-blocking.
+- Submit the result through the [private-beta feedback form](https://github.com/dezzerr/pneuma/issues/new?template=private-beta-feedback.md).
