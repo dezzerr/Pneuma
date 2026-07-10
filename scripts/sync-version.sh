@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
-# Sync the project version from a git tag (e.g. v0.2.0) across all
+# Sync the project version from a git tag (e.g. v0.2.0 or beta-v0.2.0) across all
 # files that carry a version string.  Used in CI before tauri build.
 set -euo pipefail
 
-VERSION="${1#v}"  # strip leading 'v'
+VERSION_INPUT="${1:-}"
+case "$VERSION_INPUT" in
+  beta-v*) VERSION="${VERSION_INPUT#beta-v}" ;;
+  v*) VERSION="${VERSION_INPUT#v}" ;;
+  *) VERSION="$VERSION_INPUT" ;;
+esac
+
+if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+  echo "Invalid version '$VERSION_INPUT'. Expected vX.Y.Z, beta-vX.Y.Z, or X.Y.Z." >&2
+  exit 1
+fi
 
 # --- package.json ---
 jq --arg v "$VERSION" '.version = $v' package.json > tmp && mv tmp package.json

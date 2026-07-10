@@ -5,6 +5,12 @@ on:
     tags:
       - "beta-v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version for the private beta (for example 0.2.0)"
+        required: true
+        default: "0.1.0"
+        type: string
 
 permissions:
   contents: read
@@ -123,8 +129,10 @@ jobs:
       - name: Create placeholder API key
         run: echo "" > src-tauri/api_bible_key.txt
 
-      - name: Sync version from tag
-        run: ./scripts/sync-version.sh "${GITHUB_REF_NAME}"
+      - name: Sync version
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: ./scripts/sync-version.sh "$RELEASE_VERSION"
 
       - name: Build Python sidecar
         run: |
@@ -148,5 +156,160 @@ jobs:
         with:
           name: pneuma-macos-private-beta-dmg
           path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  # ──────────────────────────── Windows quality gate ────────────────────
+  quality-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create Python environment
+        shell: pwsh
+        run: |
+          python -m venv sidecar/.venv
+          sidecar/.venv/Scripts/python.exe -m pip install --upgrade pip
+          sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements.txt
+          sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements-dev.txt
+
+      - name: Frontend build
+        run: npm run build
+
+      - name: Frontend lint
+        run: npm run lint
+
+      - name: Frontend format check
+        run: npm run format:check
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Python lint
+        shell: pwsh
+        run: |
+          sidecar/.venv/Scripts/ruff.exe check sidecar/pneuma_sidecar
+          sidecar/.venv/Scripts/black.exe --check sidecar/pneuma_sidecar
+
+      - name: Python tests
+        shell: pwsh
+        working-directory: sidecar
+        run: .venv/Scripts/python.exe -m pytest -v --cov=pneuma_sidecar
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Create placeholder API key
+        shell: pwsh
+        run: Set-Content -Path src-tauri/api_bible_key.txt -Value "" -NoNewline
+
+      - name: Rustfmt check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # ──────────────────────────── Windows beta build ──────────────────────
+  build-windows:
+    runs-on: windows-latest
+    needs: [quality, quality-windows]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create placeholder API key
+        shell: pwsh
+        run: Set-Content -Path src-tauri/api_bible_key.txt -Value "" -NoNewline
+
+      - name: Sync version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: ./scripts/sync-version.sh "$RELEASE_VERSION"
+
+      - name: Build Python sidecar
+        shell: pwsh
+        run: |
+          python -m venv sidecar/.venv
+          sidecar/.venv/Scripts/python.exe -m pip install --upgrade pip
+          sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements.txt
+          sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements-packaging.txt
+          Set-Location sidecar
+          .venv/Scripts/python.exe -m PyInstaller pneuma_sidecar.spec --noconfirm
+
+      - name: Verify bundled sidecar
+        shell: pwsh
+        run: |
+          $sidecar = "sidecar/dist/pneuma-sidecar/pneuma-sidecar.exe"
+          if (-not (Test-Path $sidecar)) { throw "Bundled sidecar not found at $sidecar" }
+          & $sidecar --help
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Verify installers
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi"
+          $nsis = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe"
+          if (-not $msi) { throw "MSI installer was not generated" }
+          if (-not $nsis) { throw "NSIS installer was not generated" }
+
+      - name: Upload MSI private beta installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: pneuma-windows-private-beta-msi
+          path: src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload NSIS private beta installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: pneuma-windows-private-beta-nsis
+          path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14

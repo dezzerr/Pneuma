@@ -12,10 +12,11 @@ labels: beta-feedback
 ## Environment
 
 - Pneuma version:
-- macOS version:
-- Mac model and memory:
+- Operating system and version:
+- Mac/PC model and memory:
 - Microphone or audio interface:
-- Installed from the private-beta DMG: Yes / No
+- Installer type (DMG / MSI / NSIS):
+- Installed from a private-beta artifact: Yes / No
 
 ## Steps to reproduce
 
@@ -33,7 +34,8 @@ labels: beta-feedback
 
 ## Evidence
 
-<!-- Attach a screenshot, screen recording, or relevant console output when possible. -->
+<!-- Attach a screenshot, screen recording, SmartScreen message, or relevant
+console/sidecar output when possible. -->
 
 ## Severity
 
