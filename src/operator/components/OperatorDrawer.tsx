@@ -1,20 +1,14 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useOperatorStore } from "../store";
 import { CanvasControls } from "./CanvasControls";
-import { NDIPanel } from "./NDIPanel";
 import { BibleImporter } from "./BibleImporter";
 import { SettingsPanel } from "./SettingsPanel";
-import { TranslationMarketplace } from "./TranslationMarketplace";
-import { BillingPanel } from "./BillingPanel";
-import { Monitor, Radio, BookOpen, Settings, Globe, CreditCard, X } from "lucide-react";
+import { Monitor, BookOpen, Settings, X } from "lucide-react";
 import type { DrawerTab } from "../store";
 
 const TABS: { id: DrawerTab; label: string; icon: React.ElementType }[] = [
   { id: "canvas", label: "Canvas", icon: Monitor },
-  { id: "ndi", label: "NDI", icon: Radio },
   { id: "import", label: "Import", icon: BookOpen },
-  { id: "marketplace", label: "Marketplace", icon: Globe },
-  { id: "billing", label: "Billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -79,10 +73,7 @@ export function OperatorDrawer() {
             {/* Active panel */}
             <div className="h-[calc(100%-48px)] overflow-hidden">
               {drawerTab === "canvas" && <CanvasControls />}
-              {drawerTab === "ndi" && <NDIPanel />}
               {drawerTab === "import" && <BibleImporter />}
-              {drawerTab === "marketplace" && <TranslationMarketplace />}
-              {drawerTab === "billing" && <BillingPanel />}
               {drawerTab === "settings" && <SettingsPanel />}
             </div>
           </motion.aside>

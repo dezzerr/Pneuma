@@ -6,7 +6,8 @@ const SERVICE_NAME: &str = "pneuma.app";
 pub async fn credential_store(key: String, value: String) -> Result<(), String> {
     let entry = Entry::new(SERVICE_NAME, &key)
         .map_err(|e| format!("Keyring entry creation error: {}", e))?;
-    entry.set_password(&value)
+    entry
+        .set_password(&value)
         .map_err(|e| format!("Keyring store error: {}", e))
 }
 
@@ -33,6 +34,7 @@ pub async fn credential_delete(key: String) -> Result<(), String> {
 }
 
 /// Synchronous helper for use in setup() before async runtime is fully available.
+#[allow(dead_code)]
 pub fn load_credential_sync(key: &str) -> Option<String> {
     let entry = Entry::new(SERVICE_NAME, key).ok()?;
     entry.get_password().ok()

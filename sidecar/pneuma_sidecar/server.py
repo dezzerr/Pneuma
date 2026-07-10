@@ -37,14 +37,13 @@ import json
 import math
 import sys
 from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 
-from pneuma_sidecar.scripture_parser import parse as parse_scriptures
-from pneuma_sidecar.semantic_engine import SemanticEngine
-from pneuma_sidecar.semantic_cache import SemanticCache
 from pneuma_sidecar.deepgram_engine import DeepgramEngine
+from pneuma_sidecar.scripture_parser import parse as parse_scriptures
+from pneuma_sidecar.semantic_cache import SemanticCache
+from pneuma_sidecar.semantic_engine import SemanticEngine
 
 try:
     import websockets
@@ -54,13 +53,13 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 
 # --- Audio / VAD constants -------------------------------------------------
 
-SAMPLE_RATE = 16_000           # Hz, fixed contract with the frontend worklet
-START_RMS = 0.015              # energy above this is treated as speech
-SILENCE_HANGOVER_MS = 700      # trailing silence that ends an utterance
-MIN_UTTERANCE_MS = 350         # ignore blips shorter than this
-PARTIAL_INTERVAL_MS = 900      # emit interim transcripts this often while speaking
-MAX_UTTERANCE_MS = 15_000      # force-finalize runaway segments
-SCRIPTURE_HOLD_MS = 750        # inference-delay hold before emitting detected scriptures
+SAMPLE_RATE = 16_000  # Hz, fixed contract with the frontend worklet
+START_RMS = 0.015  # energy above this is treated as speech
+SILENCE_HANGOVER_MS = 700  # trailing silence that ends an utterance
+MIN_UTTERANCE_MS = 350  # ignore blips shorter than this
+PARTIAL_INTERVAL_MS = 900  # emit interim transcripts this often while speaking
+MAX_UTTERANCE_MS = 15_000  # force-finalize runaway segments
+SCRIPTURE_HOLD_MS = 750  # inference-delay hold before emitting detected scriptures
 
 
 def _ms_to_samples(ms: float) -> int:
@@ -129,9 +128,7 @@ class TranscriptionEngine:
             f"({self.compute_type}, cpu)...",
             file=sys.stderr,
         )
-        self._model = WhisperModel(
-            self.model_size, device="cpu", compute_type=self.compute_type
-        )
+        self._model = WhisperModel(self.model_size, device="cpu", compute_type=self.compute_type)
         print("[pneuma-sidecar] Model ready.", file=sys.stderr)
 
     def _transcribe_sync(self, audio: np.ndarray) -> tuple[str, float]:
@@ -195,7 +192,7 @@ class Session:
         self,
         ws,
         engine: TranscriptionEngine,
-        semantic: Optional[SemanticEngine] = None,
+        semantic: SemanticEngine | None = None,
         engine_mode: str = "local",
         deepgram_key: str = "",
         deepgram_model: str = "nova-3",
@@ -211,7 +208,7 @@ class Session:
         self._pending_scriptures: list[dict] = []
         self._hold_task: asyncio.Task | None = None
         # Deepgram cloud engine (created lazily if key provided)
-        self._deepgram: Optional[DeepgramEngine] = None
+        self._deepgram: DeepgramEngine | None = None
         self._deepgram_key = deepgram_key
         self._deepgram_model = deepgram_model
         # Semantic search result cache (LRU + TTL)
@@ -293,7 +290,7 @@ class Session:
             cached = self._semantic_cache.get(text)
             if cached is not None:
                 scriptures = cached
-                print(f"[pneuma-sidecar] Semantic cache HIT", file=sys.stderr)
+                print("[pneuma-sidecar] Semantic cache HIT", file=sys.stderr)
             else:
                 # Layer 2: semantic vector search on regex miss
                 try:
@@ -303,7 +300,7 @@ class Session:
                     print(f"[pneuma-sidecar] Semantic search error: {exc}", file=sys.stderr)
                 else:
                     self._semantic_cache.put(text, scriptures)
-                    print(f"[pneuma-sidecar] Semantic cache MISS", file=sys.stderr)
+                    print("[pneuma-sidecar] Semantic cache MISS", file=sys.stderr)
 
         if not scriptures:
             await self._flush_pending()
@@ -312,9 +309,7 @@ class Session:
 
         await self._hold_final(text, confidence, scriptures)
 
-    async def _hold_final(
-        self, text: str, confidence: float, scriptures: list[dict]
-    ) -> None:
+    async def _hold_final(self, text: str, confidence: float, scriptures: list[dict]) -> None:
         """Store pending detection and start/reset the hold timer."""
         # If we already have a pending chunk, emit it now (without scriptures)
         if self._hold_task is not None:
@@ -361,21 +356,24 @@ class Session:
             self._pending_confidence = 0.0
             self._pending_scriptures = []
 
-    async def _on_deepgram_transcript(
-        self, text: str, confidence: float, is_final: bool
-    ) -> None:
+    async def _on_deepgram_transcript(self, text: str, confidence: float, is_final: bool) -> None:
         """Callback for Deepgram streaming transcripts."""
         if not is_final:
             await _send(self.ws, _transcript_message(text, confidence, is_final=False))
             return
         await self._process_final_transcript(text, confidence)
 
-    def _on_deepgram_status(self, state: str, message: Optional[str] = None) -> None:
+    def _on_deepgram_status(self, state: str, message: str | None = None) -> None:
         """Forward Deepgram guardrail status events to the client."""
-        asyncio.create_task(_send(self.ws, {
-            "event_type": "STATUS",
-            "payload": {"state": state, "message": message or ""},
-        }))
+        asyncio.create_task(
+            _send(
+                self.ws,
+                {
+                    "event_type": "STATUS",
+                    "payload": {"state": state, "message": message or ""},
+                },
+            )
+        )
 
     async def _switch_engine(self, mode: str) -> None:
         """Switch between cloud and local transcription engines."""
@@ -397,10 +395,13 @@ class Session:
                 await self._deepgram.disconnect()
             self.engine_mode = "local"
 
-        await _send(self.ws, {
-            "event_type": "STATUS",
-            "payload": {"state": "engine_switched", "message": self.engine_mode},
-        })
+        await _send(
+            self.ws,
+            {
+                "event_type": "STATUS",
+                "payload": {"state": "engine_switched", "message": self.engine_mode},
+            },
+        )
 
     async def cleanup(self) -> None:
         """Clean up session resources."""
@@ -460,7 +461,7 @@ class Session:
 
 def make_handler(
     engine: TranscriptionEngine,
-    semantic: Optional[SemanticEngine] = None,
+    semantic: SemanticEngine | None = None,
     engine_mode: str = "local",
     deepgram_key: str = "",
     deepgram_model: str = "nova-3",
@@ -468,7 +469,9 @@ def make_handler(
     async def handler(ws):
         await _send(ws, {"event_type": "STATUS", "payload": {"state": "ready"}})
         session = Session(
-            ws, engine, semantic,
+            ws,
+            engine,
+            semantic,
             engine_mode=engine_mode,
             deepgram_key=deepgram_key,
             deepgram_model=deepgram_model,
@@ -505,7 +508,7 @@ async def serve(
         raise
 
     # Initialize semantic engine if paths are provided
-    semantic: Optional[SemanticEngine] = None
+    semantic: SemanticEngine | None = None
     if embeddings_path and lance_path and onnx_model_path:
         semantic = SemanticEngine(
             model_path=onnx_model_path,

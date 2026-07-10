@@ -1,26 +1,8 @@
 import { useOperatorStore } from "../store";
-import { Settings, Target, Tag, RotateCcw, User, Building2, ShieldCheck, Clock3 } from "lucide-react";
-import type { SaaSAccountState } from "@/shared/types";
-
-function formatDurationSeconds(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
-}
+import { Settings, Target, Tag, RotateCcw } from "lucide-react";
 
 export function SettingsPanel() {
-  const { appSettings, updateSettings, saasState, saveSaasAccount } = useOperatorStore();
-
-  const planOptions: { value: SaaSAccountState["plan"]; label: string }[] = [
-    { value: "free", label: "Free" },
-    { value: "standard", label: "Standard" },
-  ];
-
-  const subscriptionOptions: { value: SaaSAccountState["subscription_status"]; label: string }[] = [
-    { value: "inactive", label: "Inactive" },
-    { value: "active", label: "Active" },
-    { value: "grace_period", label: "Grace Period" },
-  ];
+  const { appSettings, updateSettings } = useOperatorStore();
 
   return (
     <div className="flex h-full flex-col overflow-hidden p-4">
@@ -32,115 +14,6 @@ export function SettingsPanel() {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto pr-1">
-        <section>
-          <div className="mb-2 flex items-center gap-1.5">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold text-foreground">Cloud Account</h3>
-          </div>
-          <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-            <label className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Signed In</span>
-              <input
-                type="checkbox"
-                checked={saasState.account.signed_in}
-                onChange={(e) => void saveSaasAccount({ signed_in: e.target.checked })}
-                className="accent-primary"
-              />
-            </label>
-            <input
-              type="email"
-              value={saasState.account.email}
-              onChange={(e) => void saveSaasAccount({ email: e.target.value })}
-              placeholder="church@pneuma.app"
-              className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-            />
-          </div>
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold text-foreground">Organization</h3>
-          </div>
-          <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-            <input
-              type="text"
-              value={saasState.account.organization_name}
-              onChange={(e) => void saveSaasAccount({ organization_name: e.target.value })}
-              placeholder="Church Name"
-              className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-            />
-            <input
-              type="text"
-              value={saasState.account.organization_timezone}
-              onChange={(e) => void saveSaasAccount({ organization_timezone: e.target.value })}
-              placeholder="UTC"
-              className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-            />
-          </div>
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold text-foreground">Plan & Billing State</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-3">
-            <select
-              value={saasState.account.plan}
-              onChange={(e) => void saveSaasAccount({ plan: e.target.value as SaaSAccountState["plan"] })}
-              className="rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-            >
-              {planOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <select
-              value={saasState.account.subscription_status}
-              onChange={(e) => void saveSaasAccount({ subscription_status: e.target.value as SaaSAccountState["subscription_status"] })}
-              className="rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-            >
-              {subscriptionOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold text-foreground">Weekly Cloud Usage</h3>
-          </div>
-          <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-[11px] text-muted-foreground">
-            <div className="flex items-center justify-between">
-              <span>Status</span>
-              <span className="font-medium text-foreground">
-                {saasState.usage.unlimited ? "Unlimited" : formatDurationSeconds(saasState.usage.remaining_seconds)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Used This Week</span>
-              <span className="font-medium text-foreground">{formatDurationSeconds(saasState.usage.used_seconds)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Timezone</span>
-              <span className="font-medium text-foreground">{saasState.usage.timezone}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Cloud Access</span>
-              <span className={`font-medium ${saasState.usage.cloud_allowed ? "text-green-500" : "text-warning"}`}>
-                {saasState.usage.cloud_allowed ? "Available" : "Blocked"}
-              </span>
-            </div>
-            {!saasState.usage.cloud_allowed && saasState.usage.blocking_reason && (
-              <p className="rounded-lg bg-warning/10 px-2 py-1.5 text-warning">
-                {saasState.usage.blocking_reason}
-              </p>
-            )}
-          </div>
-        </section>
-
         {/* Semantic Threshold */}
         <section>
           <div className="mb-2 flex items-center gap-1.5">
@@ -196,7 +69,7 @@ export function SettingsPanel() {
           <button
             onClick={() =>
               updateSettings({
-                semantic_threshold: 0.70,
+                semantic_threshold: 0.7,
                 hot_words: [],
               })
             }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 
@@ -19,7 +19,7 @@ fn sidecar_dir() -> PathBuf {
 }
 
 /// Path to the dev virtualenv Python interpreter inside `sidecar/.venv`.
-fn venv_python(dir: &PathBuf) -> PathBuf {
+fn venv_python(dir: &Path) -> PathBuf {
     if cfg!(target_os = "windows") {
         dir.join(".venv").join("Scripts").join("python.exe")
     } else {
@@ -29,9 +29,11 @@ fn venv_python(dir: &PathBuf) -> PathBuf {
 
 /// In release builds, the PyInstaller-bundled sidecar lives alongside other
 /// bundled resources. Tauri resolves `resource_dir()` at runtime.
-fn bundled_sidecar_path(resource_dir: &PathBuf) -> PathBuf {
+fn bundled_sidecar_path(resource_dir: &Path) -> PathBuf {
     if cfg!(target_os = "windows") {
-        resource_dir.join("pneuma-sidecar").join("pneuma-sidecar.exe")
+        resource_dir
+            .join("pneuma-sidecar")
+            .join("pneuma-sidecar.exe")
     } else {
         resource_dir.join("pneuma-sidecar").join("pneuma-sidecar")
     }
@@ -51,7 +53,11 @@ pub fn spawn_sidecar(
     resource_dir: Option<PathBuf>,
     model_tier: String,
 ) -> Option<Child> {
-    let model = if model_tier.is_empty() { "base" } else { model_tier.as_str() };
+    let model = if model_tier.is_empty() {
+        "base"
+    } else {
+        model_tier.as_str()
+    };
 
     let (mut cmd, is_bundled) = if cfg!(debug_assertions) {
         // --- Dev: use venv Python ---
@@ -81,10 +87,7 @@ pub fn spawn_sidecar(
         let sidecar_exe = bundled_sidecar_path(&res_dir);
 
         if !sidecar_exe.exists() {
-            eprintln!(
-                "[sidecar] Bundled sidecar not found at {:?}.",
-                sidecar_exe
-            );
+            eprintln!("[sidecar] Bundled sidecar not found at {:?}.", sidecar_exe);
             return None;
         }
 

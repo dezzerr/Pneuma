@@ -1,0 +1,140 @@
+name: Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/
+          if-no-files-found: warn
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtualenv
+        run: |
+          python -m venv sidecar/.venv
+          sidecar/.venv/bin/pip install --upgrade pip
+          sidecar/.venv/bin/pip install -r sidecar/requirements.txt
+          sidecar/.venv/bin/pip install -r sidecar/requirements-dev.txt
+
+      - name: Ruff check
+        run: sidecar/.venv/bin/ruff check sidecar/pneuma_sidecar
+
+      - name: Black check
+        run: sidecar/.venv/bin/black --check sidecar/pneuma_sidecar
+
+      - name: Pytest
+        run: |
+          cd sidecar
+          .venv/bin/python -m pytest -v --cov=pneuma_sidecar --cov-report=xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: sidecar/coverage.xml
+          if-no-files-found: warn
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-quality-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-quality-
+
+      - name: Create placeholder API key
+        run: echo "" > src-tauri/api_bible_key.txt
+
+      - name: Rustfmt check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Pip audit
+        run: |
+          pip install pip-audit
+          pip-audit -r sidecar/requirements.txt || true
+
+      - name: Scan for hardcoded secrets
+        run: |
+          ! grep -rn --include="*.ts" --include="*.tsx" --include="*.rs" --include="*.py" \
+            --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=target --exclude-dir=.venv \
+            -E '(sk-[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9]{20,}|api_key\s*=\s*["\x27][A-Za-z0-9]{20,})' \
+            . || echo "No hardcoded secrets found"

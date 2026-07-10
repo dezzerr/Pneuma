@@ -38,14 +38,15 @@ export function VerseDisplay() {
       ? "absolute bottom-8 left-8 right-8 p-8"
       : "absolute inset-0 flex flex-col items-center justify-center p-16";
 
-  const containerStyle = theme.layoutMode === "lower-thirds"
-    ? {
-        background: theme.alphaBackground ? "transparent" : theme.backgroundColor,
-        borderRadius: "1.5rem",
-      }
-    : {
-        background: theme.alphaBackground ? "transparent" : theme.backgroundColor,
-      };
+  const containerStyle =
+    theme.layoutMode === "lower-thirds"
+      ? {
+          background: theme.alphaBackground ? "transparent" : theme.backgroundColor,
+          borderRadius: "1.5rem",
+        }
+      : {
+          background: theme.alphaBackground ? "transparent" : theme.backgroundColor,
+        };
 
   const animationVariants = {
     fade: {
@@ -105,7 +106,7 @@ export function VerseDisplay() {
       )}
       {isVisible && (
         <motion.div
-          key={hasMultipleVerses ? `${verse?.id}-${currentPage}` : verse?.id ?? "empty"}
+          key={hasMultipleVerses ? `${verse?.id}-${currentPage}` : (verse?.id ?? "empty")}
           initial={variant.initial}
           animate={variant.animate}
           exit={variant.exit}
@@ -113,10 +114,7 @@ export function VerseDisplay() {
           className={containerClass}
           style={containerStyle}
         >
-          <div
-            className="w-full"
-            style={{ textAlign: theme.alignment }}
-          >
+          <div className="w-full" style={{ textAlign: theme.alignment }}>
             {/* Reference */}
             <motion.p
               className="mb-3 font-semibold tracking-wide"
@@ -125,10 +123,14 @@ export function VerseDisplay() {
                 fontSize: `${theme.fontSize * 0.5}px`,
                 fontFamily: theme.fontFamily,
               }}
-              variants={isKinetic ? {
-                initial: { opacity: 0, x: -80 },
-                animate: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" } },
-              } : undefined}
+              variants={
+                isKinetic
+                  ? {
+                      initial: { opacity: 0, x: -80 },
+                      animate: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" } },
+                    }
+                  : undefined
+              }
             >
               {formatRef()}
             </motion.p>
@@ -141,10 +143,18 @@ export function VerseDisplay() {
                 fontFamily: theme.fontFamily,
                 lineHeight: 1.4,
               }}
-              variants={isKinetic ? {
-                initial: { opacity: 0, x: -80 },
-                animate: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut", delay: 0.15 } },
-              } : undefined}
+              variants={
+                isKinetic
+                  ? {
+                      initial: { opacity: 0, x: -80 },
+                      animate: {
+                        opacity: 1,
+                        x: 0,
+                        transition: { duration: 0.4, ease: "easeOut", delay: 0.15 },
+                      },
+                    }
+                  : undefined
+              }
             >
               {hasMultipleVerses && activeVerse
                 ? activeVerse.text

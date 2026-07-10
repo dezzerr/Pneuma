@@ -1,10 +1,7 @@
 import { useEffect, useRef } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export function useTauriEvent<T>(
-  eventName: string,
-  handler: (payload: T) => void
-) {
+export function useTauriEvent<T>(eventName: string, handler: (payload: T) => void) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
@@ -16,15 +13,17 @@ export function useTauriEvent<T>(
       if (mounted) {
         handlerRef.current(event.payload);
       }
-    }).then((fn) => {
-      if (mounted) {
-        unlisten = fn;
-      } else {
-        fn();
-      }
-    }).catch((err) => {
-      console.warn(`[useTauriEvent] Failed to listen for "${eventName}":`, err);
-    });
+    })
+      .then((fn) => {
+        if (mounted) {
+          unlisten = fn;
+        } else {
+          fn();
+        }
+      })
+      .catch((err) => {
+        console.warn(`[useTauriEvent] Failed to listen for "${eventName}":`, err);
+      });
 
     return () => {
       mounted = false;

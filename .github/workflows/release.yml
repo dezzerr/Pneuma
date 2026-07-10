@@ -1,0 +1,152 @@
+name: Private Beta Build
+
+on:
+  push:
+    tags:
+      - "beta-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ──────────────────────────── Quality gate ────────────────────────────
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Frontend ──
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm run test:coverage
+
+      # ── Python ──
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtualenv
+        run: |
+          python -m venv sidecar/.venv
+          sidecar/.venv/bin/pip install --upgrade pip
+          sidecar/.venv/bin/pip install -r sidecar/requirements.txt
+          sidecar/.venv/bin/pip install -r sidecar/requirements-dev.txt
+
+      - name: Ruff check
+        run: sidecar/.venv/bin/ruff check sidecar/pneuma_sidecar
+
+      - name: Black check
+        run: sidecar/.venv/bin/black --check sidecar/pneuma_sidecar
+
+      - name: Pytest
+        run: |
+          cd sidecar
+          .venv/bin/python -m pytest -v --cov=pneuma_sidecar --cov-report=xml
+
+      # ── Rust ──
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - name: Create placeholder API key
+        run: echo "" > src-tauri/api_bible_key.txt
+
+      - name: Rustfmt check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # ──────────────────────────── macOS beta build ────────────────────────
+  build-macos:
+    runs-on: macos-14
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create placeholder API key
+        run: echo "" > src-tauri/api_bible_key.txt
+
+      - name: Sync version from tag
+        run: ./scripts/sync-version.sh "${GITHUB_REF_NAME}"
+
+      - name: Build Python sidecar
+        run: |
+          python -m venv sidecar/.venv
+          sidecar/.venv/bin/pip install --upgrade pip
+          sidecar/.venv/bin/pip install -r sidecar/requirements.txt
+          sidecar/.venv/bin/pip install -r sidecar/requirements-packaging.txt
+          cd sidecar
+          .venv/bin/pyinstaller pneuma_sidecar.spec --noconfirm
+
+      - name: Smoke-test sidecar
+        run: sidecar/dist/pneuma-sidecar/pneuma-sidecar --help
+
+      - name: Build Tauri app (ad-hoc signed)
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npm run tauri build
+
+      - name: Upload private beta DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: pneuma-macos-private-beta-dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14

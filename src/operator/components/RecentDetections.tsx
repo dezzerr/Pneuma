@@ -12,8 +12,7 @@ export function RecentDetections() {
       : `${book_name} ${chapter}:${verse_start}-${verse_end}`;
   };
 
-  const isInQueue = (item: VerseQueueItem) =>
-    verseQueue.some((v) => v.id === item.id);
+  const isInQueue = (item: VerseQueueItem) => verseQueue.some((v) => v.id === item.id);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -36,9 +35,7 @@ export function RecentDetections() {
           <div className="flex h-full items-center justify-center text-center">
             <div className="space-y-1">
               <Clock className="mx-auto h-8 w-8 text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground">
-                No detections yet.
-              </p>
+              <p className="text-xs text-muted-foreground">No detections yet.</p>
               <p className="text-[10px] text-muted-foreground/60">
                 Detected verses will appear here.
               </p>
@@ -78,7 +75,9 @@ export function RecentDetections() {
                       <span className="text-[9px] font-medium text-primary">Live</span>
                     )}
                     {item.status === "dismissed" && (
-                      <span className="text-[9px] font-medium text-muted-foreground">Dismissed</span>
+                      <span className="text-[9px] font-medium text-muted-foreground">
+                        Dismissed
+                      </span>
                     )}
                   </div>
                 </div>

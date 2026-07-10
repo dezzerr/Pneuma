@@ -76,9 +76,7 @@ export function LiveOutputMonitor() {
                 lineHeight: 1.4,
               }}
             >
-              {hasMultiple && activeVerse
-                ? activeVerse.text
-                : liveItem.verse_text || ""}
+              {hasMultiple && activeVerse ? activeVerse.text : liveItem.verse_text || ""}
             </p>
             {hasMultiple && (
               <p

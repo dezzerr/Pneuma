@@ -11,18 +11,49 @@ import asyncio
 import os
 import re
 import sys
-from typing import Optional
 
 import numpy as np
 
 # Distinctive biblical terms that boost relevance when present in the query.
-_BIBLICAL_KEYWORDS = frozenset({
-    "god", "jesus", "christ", "lord", "faith", "grace", "love", "spirit",
-    "holy", "sin", "salvation", "heaven", "prayer", "mercy", "peace",
-    "covenant", "righteousness", "kingdom", "glory", "worship", "hope",
-    "light", "truth", "life", "death", "blood", "cross", "resurrection",
-    "shepherd", "soul", "heart", "flesh", "world", "eternal", "everlasting",
-})
+_BIBLICAL_KEYWORDS = frozenset(
+    {
+        "god",
+        "jesus",
+        "christ",
+        "lord",
+        "faith",
+        "grace",
+        "love",
+        "spirit",
+        "holy",
+        "sin",
+        "salvation",
+        "heaven",
+        "prayer",
+        "mercy",
+        "peace",
+        "covenant",
+        "righteousness",
+        "kingdom",
+        "glory",
+        "worship",
+        "hope",
+        "light",
+        "truth",
+        "life",
+        "death",
+        "blood",
+        "cross",
+        "resurrection",
+        "shepherd",
+        "soul",
+        "heart",
+        "flesh",
+        "world",
+        "eternal",
+        "everlasting",
+    }
+)
 
 
 def _tokenize(text: str) -> set[str]:
@@ -53,8 +84,8 @@ def _phrase_overlap(query: str, verse: str) -> float:
     v_words = re.sub(r"[^\w\s]", "", verse.lower()).split()
     if len(q_words) < 2 or len(v_words) < 2:
         return 0.0
-    q_grams = {tuple(q_words[i:i+2]) for i in range(len(q_words) - 1)}
-    v_grams = {tuple(v_words[i:i+2]) for i in range(len(v_words) - 1)}
+    q_grams = {tuple(q_words[i : i + 2]) for i in range(len(q_words) - 1)}
+    v_grams = {tuple(v_words[i : i + 2]) for i in range(len(v_words) - 1)}
     overlap = q_grams & v_grams
     return len(overlap) / max(len(q_grams), 1)
 
@@ -109,7 +140,6 @@ class SemanticEngine:
     def _ensure_indexed(self) -> None:
         """Bulk-load pre-computed embeddings parquet into LanceDB if table missing."""
         import lancedb
-        import pyarrow as pa
         import pyarrow.parquet as pq
 
         os.makedirs(self.lance_path, exist_ok=True)
@@ -122,9 +152,7 @@ class SemanticEngine:
             return
 
         if not os.path.exists(self.embeddings_path):
-            raise FileNotFoundError(
-                f"Embeddings parquet not found: {self.embeddings_path}"
-            )
+            raise FileNotFoundError(f"Embeddings parquet not found: {self.embeddings_path}")
 
         print("[pneuma-sidecar] Loading verse embeddings into LanceDB...", file=sys.stderr)
         table_arrow = pq.read_table(self.embeddings_path)
@@ -200,22 +228,19 @@ class SemanticEngine:
             phrase = _phrase_overlap(text, verse_text)
 
             # Composite score: 60% cosine + 20% jaccard + 10% keyword + 10% phrase
-            composite = (
-                0.6 * cosine
-                + 0.2 * jac
-                + 0.1 * kw_boost
-                + 0.1 * phrase
-            )
+            composite = 0.6 * cosine + 0.2 * jac + 0.1 * kw_boost + 0.1 * phrase
 
-            matches.append({
-                "match_type": "SEMANTIC",
-                "book_id": int(r["book_id"]),
-                "book_name": r["book_name"],
-                "chapter": int(r["chapter"]),
-                "verse_start": int(r["verse_start"]),
-                "verse_end": int(r["verse_end"]),
-                "score": float(composite),
-            })
+            matches.append(
+                {
+                    "match_type": "SEMANTIC",
+                    "book_id": int(r["book_id"]),
+                    "book_name": r["book_name"],
+                    "chapter": int(r["chapter"]),
+                    "verse_start": int(r["verse_start"]),
+                    "verse_end": int(r["verse_end"]),
+                    "score": float(composite),
+                }
+            )
 
         matches.sort(key=lambda m: m["score"], reverse=True)
 

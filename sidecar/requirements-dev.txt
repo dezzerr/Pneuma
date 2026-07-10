@@ -1,0 +1,9 @@
+# Development/test dependencies for the Python sidecar.
+# Install into the sidecar venv:
+#   sidecar/.venv/bin/pip install -r sidecar/requirements-dev.txt
+
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov>=5.0
+ruff>=0.8
+black>=24.0

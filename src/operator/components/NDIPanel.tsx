@@ -67,7 +67,7 @@ export function NDIPanel() {
 
       {ndiActive && !ndiError && (
         <div className="mt-3 rounded-xl bg-primary/10 px-3 py-2 text-xs text-primary">
-          Source "Pneuma Presentation" is live on the local network.
+          Source &quot;Pneuma Presentation&quot; is live on the local network.
         </div>
       )}
     </div>

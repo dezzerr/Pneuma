@@ -28,9 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex h-screen w-screen items-center justify-center bg-zinc-900 p-8 text-zinc-100">
           <div className="max-w-md space-y-3">
-            <h1 className="text-lg font-semibold text-red-400">
-              Pneuma encountered an error
-            </h1>
+            <h1 className="text-lg font-semibold text-red-400">Pneuma encountered an error</h1>
             <pre className="overflow-auto rounded-md bg-zinc-800 p-3 text-xs text-zinc-300">
               {this.state.error?.message}
             </pre>

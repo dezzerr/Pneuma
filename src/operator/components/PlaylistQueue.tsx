@@ -50,9 +50,7 @@ export function PlaylistQueue() {
                   : "border-border bg-card hover:border-primary/30"
               }`}
             >
-              <span className="w-5 text-center text-[10px] text-muted-foreground">
-                {i + 1}
-              </span>
+              <span className="w-5 text-center text-[10px] text-muted-foreground">{i + 1}</span>
               <div className="flex-1 truncate">
                 <span className="font-medium text-foreground">{item.label}</span>
                 {item.type === "verse" && (

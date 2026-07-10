@@ -131,6 +131,29 @@ pub async fn ndi_start_broadcast(
     Ok(())
 }
 
+#[cfg(not(feature = "ndi"))]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tauri::async_runtime::block_on;
+
+    #[test]
+    fn test_ndi_start_broadcast_stub_returns_error() {
+        let result = block_on(ndi_start_broadcast());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not compiled in"));
+    }
+
+    #[test]
+    fn test_ndi_get_status_stub() {
+        let result = block_on(ndi_get_status());
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(!status.active);
+        assert!(status.error.is_some());
+    }
+}
+
 #[cfg(feature = "ndi")]
 #[tauri::command]
 pub async fn ndi_stop_broadcast(state: tauri::State<'_, NdiState>) -> Result<(), String> {
@@ -146,16 +169,13 @@ pub async fn ndi_stop_broadcast(state: tauri::State<'_, NdiState>) -> Result<(),
 }
 
 #[cfg(feature = "ndi")]
-fn ndi_capture_loop(
-    running: Arc<AtomicBool>,
-    app_handle: tauri::AppHandle,
-) -> Result<(), String> {
+fn ndi_capture_loop(running: Arc<AtomicBool>, app_handle: tauri::AppHandle) -> Result<(), String> {
     // Initialize NDI runtime
-    let ndi = grafton_ndi::NDI::new()
-        .map_err(|e| format!("Failed to initialize NDI runtime: {}", e))?;
+    let ndi =
+        grafton_ndi::NDI::new().map_err(|e| format!("Failed to initialize NDI runtime: {}", e))?;
 
-    let version = grafton_ndi::NDI::version()
-        .map_err(|e| format!("Failed to get NDI version: {}", e))?;
+    let version =
+        grafton_ndi::NDI::version().map_err(|e| format!("Failed to get NDI version: {}", e))?;
     eprintln!("[ndi] NDI runtime version: {}", version);
 
     // Create NDI sender
@@ -169,10 +189,13 @@ fn ndi_capture_loop(
     eprintln!("[ndi] Sender created: \"{}\"", NDI_SOURCE_NAME);
 
     // Emit started event
-    let _ = app_handle.emit("ndi:status", NdiStatus {
-        active: true,
-        error: None,
-    });
+    let _ = app_handle.emit(
+        "ndi:status",
+        NdiStatus {
+            active: true,
+            error: None,
+        },
+    );
 
     let frame_duration = Duration::from_millis(1000 / TARGET_FPS as u64);
     let mut last_size: (u32, u32) = (0, 0);
@@ -190,10 +213,13 @@ fn ndi_capture_loop(
                 eprintln!("[ndi] Failed to enumerate windows: {}", e);
                 consecutive_errors += 1;
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                    let _ = app_handle.emit("ndi:status", NdiStatus {
-                        active: false,
-                        error: Some(format!("Window enumeration failed: {}", e)),
-                    });
+                    let _ = app_handle.emit(
+                        "ndi:status",
+                        NdiStatus {
+                            active: false,
+                            error: Some(format!("Window enumeration failed: {}", e)),
+                        },
+                    );
                     running.store(false, Ordering::SeqCst);
                     break;
                 }
@@ -203,17 +229,22 @@ fn ndi_capture_loop(
         };
 
         let window = windows.iter().find(|w| {
-            w.title().map(|t| t == PRESENTATION_WINDOW_TITLE).unwrap_or(false)
+            w.title()
+                .map(|t| t == PRESENTATION_WINDOW_TITLE)
+                .unwrap_or(false)
         });
 
         let window = match window {
             Some(w) => w,
             None => {
                 eprintln!("[ndi] Presentation window not found — stopping broadcast.");
-                let _ = app_handle.emit("ndi:status", NdiStatus {
-                    active: false,
-                    error: Some("Presentation window was closed".to_string()),
-                });
+                let _ = app_handle.emit(
+                    "ndi:status",
+                    NdiStatus {
+                        active: false,
+                        error: Some("Presentation window was closed".to_string()),
+                    },
+                );
                 running.store(false, Ordering::SeqCst);
                 break;
             }
@@ -226,10 +257,13 @@ fn ndi_capture_loop(
                 eprintln!("[ndi] Capture failed: {}", e);
                 consecutive_errors += 1;
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                    let _ = app_handle.emit("ndi:status", NdiStatus {
-                        active: false,
-                        error: Some(format!("Window capture failed: {}", e)),
-                    });
+                    let _ = app_handle.emit(
+                        "ndi:status",
+                        NdiStatus {
+                            active: false,
+                            error: Some(format!("Window capture failed: {}", e)),
+                        },
+                    );
                     running.store(false, Ordering::SeqCst);
                     break;
                 }
@@ -273,10 +307,13 @@ fn ndi_capture_loop(
     }
 
     // Emit stopped event
-    let _ = app_handle.emit("ndi:status", NdiStatus {
-        active: false,
-        error: None,
-    });
+    let _ = app_handle.emit(
+        "ndi:status",
+        NdiStatus {
+            active: false,
+            error: None,
+        },
+    );
 
     Ok(())
 }

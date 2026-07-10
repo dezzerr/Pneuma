@@ -19,6 +19,8 @@ __pycache__/
 resources/models/all-MiniLM-L6-v2/_st_export/model.safetensors
 
 # Build artifacts
+build/
+tmp
 *.tsbuildinfo
 vite.config.d.ts
 

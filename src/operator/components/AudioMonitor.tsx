@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useOperatorStore } from "../store";
-import { Loader2, Cloud, HardDrive, AlertTriangle, PauseCircle, Play, Pause, Square, ArrowUpCircle } from "lucide-react";
+import { Loader2, HardDrive, Play, Pause, Square } from "lucide-react";
 import type { AudioDevice } from "@/shared/types";
 import { AudioPipeline } from "../audio/AudioPipeline";
 import { SidecarClient } from "@/shared/sidecar/SidecarClient";
@@ -15,10 +14,6 @@ export function AudioMonitor() {
     setSelectedDevice,
     engineStatus,
     setEngineStatus,
-    engineMode,
-    setEngineMode,
-    engineWarning,
-    setEngineWarning,
     setVuLevel,
     ingestTranscript,
     vuLevel,
@@ -26,13 +21,6 @@ export function AudioMonitor() {
     pauseSession,
     stopSession,
     appSettings,
-    saasState,
-    refreshSaasState,
-    setDrawerTab,
-    deepgramKeySet,
-    startCloudSessionMetering,
-    pauseCloudSessionMetering,
-    stopCloudSessionMetering,
   } = useOperatorStore();
 
   // Live capture pipeline (mic -> VU + 16kHz PCM) and sidecar WebSocket.
@@ -80,22 +68,6 @@ export function AudioMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const beginCloudMode = async () => {
-    if (!deepgramKeySet) {
-      setEngineWarning("deepgram_key_missing");
-      throw new Error("Deepgram API key missing");
-    }
-    try {
-      const state = await startCloudSessionMetering();
-      setEngineWarning(null);
-      return state;
-    } catch (err) {
-      const nextWarning = saasState.account.signed_in ? "quota_exhausted" : "sign_in_required";
-      setEngineWarning(nextWarning);
-      throw err;
-    }
-  };
-
   // When the engine is running, connect the sidecar and stream mic PCM to it,
   // while also driving the VU meter from the same capture stream.
   useEffect(() => {
@@ -115,24 +87,13 @@ export function AudioMonitor() {
         }
       },
       onStatus: (state: SidecarStatusState, message?: string) => {
-        if (state === "idle_paused") {
-          setEngineWarning("idle_paused");
-        } else if (state === "connection_drop") {
-          setEngineWarning("connection_drop");
-        } else if (state === "engine_switched") {
-          if (message === "cloud") setEngineMode("cloud");
-          else if (message === "local") setEngineMode("local");
-          setEngineWarning(null);
-        } else if (state === "deepgram_ready") {
-          setEngineWarning(null);
-        }
+        if (state === "error") console.error("[AudioMonitor] Sidecar reported an error:", message);
       },
     });
     sidecarRef.current = sidecar;
     sidecar.connect();
-    // Apply the operator's engine mode preference as soon as the WS opens.
-    // setEngineMode is a no-op if the sidecar is already in that mode.
-    sidecar.setEngineMode(engineMode);
+    // Private beta is intentionally local-first; cloud transcription is not a supported path yet.
+    sidecar.setEngineMode("local");
 
     const pipeline = new AudioPipeline({
       onLevel: (level) => setVuLevel(level),
@@ -165,88 +126,18 @@ export function AudioMonitor() {
   // Single toggle: Start → Pause → Resume. Stop is a separate button.
   const handleToggle = async () => {
     if (engineStatus === "running") {
-      if (engineMode === "cloud") {
-        try {
-          await pauseCloudSessionMetering();
-        } catch {}
-      }
       pauseSession();
     } else if (engineStatus === "paused") {
-      if (engineMode === "cloud") {
-        try {
-          await beginCloudMode();
-        } catch {
-          return;
-        }
-      }
       startSession();
     } else {
-      if (engineMode === "cloud") {
-        try {
-          await beginCloudMode();
-        } catch {
-          return;
-        }
-      }
       setEngineStatus("starting");
       setTimeout(() => startSession(), 800);
     }
   };
 
   const handleStop = async () => {
-    if (engineMode === "cloud") {
-      try {
-        await stopCloudSessionMetering();
-      } catch {}
-    }
     stopSession();
   };
-
-  const handleToggleEngineMode = async () => {
-    const newMode = engineMode === "cloud" ? "local" : "cloud";
-    if (newMode === "cloud") {
-      if (!deepgramKeySet) {
-        setEngineWarning("deepgram_key_missing");
-        return;
-      }
-      if (engineStatus === "running") {
-        try {
-          await beginCloudMode();
-        } catch {
-          return;
-        }
-      }
-    }
-    if (engineMode === "cloud" && newMode === "local") {
-      try {
-        await stopCloudSessionMetering();
-      } catch {}
-    }
-    setEngineMode(newMode);
-    if (sidecarRef.current?.isOpen()) {
-      sidecarRef.current.setEngineMode(newMode);
-    }
-  };
-
-  // Push Deepgram key from OS keychain to the running sidecar when key status changes.
-  useEffect(() => {
-    if (!sidecarRef.current?.isOpen()) return;
-    if (deepgramKeySet) {
-      invoke<string | null>("credential_load", { key: "deepgram_api_key" })
-        .then((key) => {
-          if (key && sidecarRef.current?.isOpen()) {
-            sidecarRef.current.pushSettings({ deepgram_key: key });
-          }
-        })
-        .catch((err) => console.error("[AudioMonitor] Failed to load Deepgram key from keychain:", err));
-    } else {
-      sidecarRef.current.pushSettings({ deepgram_key: "" });
-    }
-  }, [deepgramKeySet]);
-
-  useEffect(() => {
-    refreshSaasState();
-  }, [refreshSaasState]);
 
   // Simulated VU meter bars — compact horizontal strip
   const bars = Array.from({ length: 12 }, (_, i) => {
@@ -315,65 +206,13 @@ export function AudioMonitor() {
         </button>
       </div>
 
-      {/* Engine Mode Toggle */}
-      <button
-        onClick={handleToggleEngineMode}
-        className={`flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-secondary ${
-          engineMode === "cloud" ? "text-blue-500" : "text-muted-foreground"
-        }`}
-        title="Toggle engine mode"
+      <div
+        className="flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground"
+        title="Private beta uses local transcription"
       >
-        {engineMode === "cloud" ? (
-          <Cloud className="h-3 w-3" />
-        ) : (
-          <HardDrive className="h-3 w-3" />
-        )}
-        <span className="capitalize">{engineMode}</span>
-      </button>
-
-      {/* Guardrail Warnings */}
-      {engineWarning === "idle_paused" && (
-        <div className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-[10px] text-warning">
-          <PauseCircle className="h-3 w-3" />
-          Idle
-        </div>
-      )}
-      {engineWarning === "connection_drop" && (
-        <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
-          <AlertTriangle className="h-3 w-3" />
-          Drop
-        </div>
-      )}
-      {engineWarning === "sign_in_required" && (
-        <div className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-[10px] text-warning">
-          <AlertTriangle className="h-3 w-3" />
-          Sign In
-        </div>
-      )}
-      {engineWarning === "quota_exhausted" && (
-        <div className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-[10px] text-warning">
-          <AlertTriangle className="h-3 w-3" />
-          Quota
-        </div>
-      )}
-      {engineWarning === "deepgram_key_missing" && (
-        <div className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-[10px] text-warning">
-          <AlertTriangle className="h-3 w-3" />
-          Key
-        </div>
-      )}
-
-      {/* Upsell prompt when cloud is blocked */}
-      {(engineWarning === "quota_exhausted" || engineWarning === "sign_in_required") && (
-        <button
-          onClick={() => setDrawerTab("billing")}
-          className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/20"
-          title="Upgrade or manage your plan"
-        >
-          <ArrowUpCircle className="h-3 w-3" />
-          Upgrade
-        </button>
-      )}
+        <HardDrive className="h-3 w-3" />
+        <span>Local</span>
+      </div>
     </div>
   );
 }

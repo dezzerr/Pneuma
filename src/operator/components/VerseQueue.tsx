@@ -44,9 +44,7 @@ export function VerseQueue() {
           <div className="flex h-full items-center justify-center text-center">
             <div className="space-y-1">
               <Clock className="mx-auto h-8 w-8 text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground">
-                No scriptures detected yet.
-              </p>
+              <p className="text-xs text-muted-foreground">No scriptures detected yet.</p>
               <p className="text-[10px] text-muted-foreground/60">
                 Detected verses will appear here for review.
               </p>
@@ -61,9 +59,7 @@ export function VerseQueue() {
               >
                 <div className="mb-2 flex items-start justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {formatRef(item)}
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">{formatRef(item)}</h3>
                     <p className="text-[10px] text-muted-foreground">
                       {new Date(item.timestamp).toLocaleTimeString()}
                     </p>
@@ -86,7 +82,7 @@ export function VerseQueue() {
 
                 {item.verse_text && (
                   <p className="mb-2 text-xs italic text-muted-foreground line-clamp-2">
-                    "{item.verse_text}"
+                    &quot;{item.verse_text}&quot;
                   </p>
                 )}
 
@@ -116,7 +112,6 @@ export function VerseQueue() {
                 </div>
               </div>
             ))}
-
           </>
         )}
       </div>

@@ -138,12 +138,15 @@ describe("operator store", () => {
         detected_scriptures: [makeScripture()],
       });
       useOperatorStore.getState().ingestTranscript(chunk);
-      expect(mockInvoke).toHaveBeenCalledWith("db_query_verses", expect.objectContaining({
-        bookIndex: 43,
-        chapter: 3,
-        verseStart: 16,
-        verseEnd: 16,
-      }));
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "db_query_verses",
+        expect.objectContaining({
+          bookIndex: 43,
+          chapter: 3,
+          verseStart: 16,
+          verseEnd: 16,
+        }),
+      );
     });
   });
 

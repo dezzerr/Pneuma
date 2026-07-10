@@ -102,12 +102,11 @@ export function TranslationMarketplace() {
     }
   };
 
-  const isInstalled = (abbr: string) =>
-    installed.some((t) => t.translation_code === abbr);
+  const isInstalled = (abbr: string) => installed.some((t) => t.translation_code === abbr);
 
   // Build unique language list from fetched bibles
   const languages = Array.from(
-    new Map(bibles.map((b) => [b.language.id, b.language.name_local || b.language.name])).values()
+    new Map(bibles.map((b) => [b.language.id, b.language.name_local || b.language.name])).values(),
   ).sort();
 
   const filtered = bibles.filter((b) => {
@@ -116,8 +115,8 @@ export function TranslationMarketplace() {
       b.name.toLowerCase().includes(q) ||
       b.abbreviation.toLowerCase().includes(q) ||
       b.language.name.toLowerCase().includes(q);
-    const matchesLang = !languageFilter ||
-      (b.language.name_local || b.language.name) === languageFilter;
+    const matchesLang =
+      !languageFilter || (b.language.name_local || b.language.name) === languageFilter;
     return matchesSearch && matchesLang;
   });
 
@@ -147,7 +146,9 @@ export function TranslationMarketplace() {
           >
             <option value="">All languages</option>
             {languages.map((lang) => (
-              <option key={lang} value={lang}>{lang}</option>
+              <option key={lang} value={lang}>
+                {lang}
+              </option>
             ))}
           </select>
         )}
@@ -156,7 +157,11 @@ export function TranslationMarketplace() {
           disabled={loading}
           className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary disabled:opacity-40"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookOpen className="h-3.5 w-3.5" />}
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <BookOpen className="h-3.5 w-3.5" />
+          )}
           Refresh
         </button>
       </div>

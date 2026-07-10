@@ -54,7 +54,10 @@ pub fn run() {
 
             // Spawn the Python AI sidecar (WebSocket inference server).
             // Resolve paths for semantic search (Layer 2).
-            let app_data_dir = app.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
             let lance_path = app_data_dir.join("lancedb");
             let lance = lance_path.to_string_lossy().to_string();
 
@@ -79,7 +82,10 @@ pub fn run() {
                 (emb, onnx, None)
             } else {
                 // Release: resolve from Tauri's resource directory.
-                let res_dir = app.path().resource_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                let res_dir = app
+                    .path()
+                    .resource_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let embeddings_path = res_dir.join("bible_embeddings.parquet");
                 let onnx_model_path = res_dir.join("models").join("all-MiniLM-L6-v2");
 
@@ -97,18 +103,27 @@ pub fn run() {
             };
 
             // Engine mode (env override; SaaS backend later)
-            let engine_mode = std::env::var("PNEUMA_ENGINE").unwrap_or_else(|_| "local".to_string());
+            let engine_mode =
+                std::env::var("PNEUMA_ENGINE").unwrap_or_else(|_| "local".to_string());
 
             // Read model_tier from saved settings (DB may not be initialized yet
             // via the async path, so we open a temporary connection here).
-            let db_path = db::get_db_path(&app.handle());
+            let db_path = db::get_db_path(app.handle());
             let model_tier = read_saved_settings(&db_path);
             // Deepgram key: use env var at startup; frontend pushes keychain key
             // to sidecar at runtime via WebSocket (avoids blocking main thread
             // with synchronous Keychain access during setup).
             let deepgram_key = std::env::var("DEEPGRAM_API_KEY").unwrap_or_default();
 
-            if let Some(child) = commands::sidecar::spawn_sidecar(emb, lance, onnx, engine_mode, deepgram_key, resource_dir, model_tier) {
+            if let Some(child) = commands::sidecar::spawn_sidecar(
+                emb,
+                lance,
+                onnx,
+                engine_mode,
+                deepgram_key,
+                resource_dir,
+                model_tier,
+            ) {
                 let state = app.state::<SidecarProcess>();
                 *state.0.lock().unwrap() = Some(child);
             }

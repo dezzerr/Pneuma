@@ -28,9 +28,7 @@ export class AudioPipeline {
     this.stop();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: deviceId
-          ? { deviceId: { exact: deviceId } }
-          : true,
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
       });
       this.stream = stream;
 

@@ -25,9 +25,7 @@ export function BibleImporter() {
     try {
       const selected = await open({
         multiple: false,
-        filters: [
-          { name: "Bible Files", extensions: ["xml", "db", "sqlite"] },
-        ],
+        filters: [{ name: "Bible Files", extensions: ["xml", "db", "sqlite"] }],
       });
 
       if (!selected) return;
@@ -105,6 +103,9 @@ export function BibleImporter() {
         <p className="text-xs text-muted-foreground">
           Supports OpenSong XML, Zefania XML, and SQLite formats
         </p>
+        <p className="rounded-xl bg-secondary px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          This private beta includes KJV. Only import translations your church is licensed to use.
+        </p>
 
         {status === "success" && result && (
           <div className="rounded-xl border border-primary/30 bg-primary/10 p-3">
@@ -113,8 +114,8 @@ export function BibleImporter() {
               <span className="text-xs font-medium text-primary">Import Successful</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {result.verses_imported.toLocaleString()} verses imported across {result.books_found} books
-              ({result.translation_code})
+              {result.verses_imported.toLocaleString()} verses imported across {result.books_found}{" "}
+              books ({result.translation_code})
             </p>
           </div>
         )}

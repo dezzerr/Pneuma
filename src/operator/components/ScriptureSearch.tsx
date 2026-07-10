@@ -16,7 +16,16 @@ interface SearchResult {
 }
 
 export function ScriptureSearch() {
-  const { stageItem, goLive, addToPlaylist, searchMode, toggleSearchMode, setSearchResultsCount, rapidSelectIndex, setRapidSelectIndex } = useOperatorStore();
+  const {
+    stageItem,
+    goLive,
+    addToPlaylist,
+    searchMode,
+    toggleSearchMode,
+    setSearchResultsCount,
+    rapidSelectIndex,
+    setRapidSelectIndex,
+  } = useOperatorStore();
 
   // Semantic search state
   const [semanticQuery, setSemanticQuery] = useState("");
@@ -248,7 +257,7 @@ export function ScriptureSearch() {
       const end = verseEnd ? parseInt(verseEnd, 10) : start;
       if (start > 0) {
         const selected = results.filter(
-          (v) => v.verse_number >= start && v.verse_number <= (end >= start ? end : start)
+          (v) => v.verse_number >= start && v.verse_number <= (end >= start ? end : start),
         );
         setSelectedVerses(selected);
       }
@@ -323,11 +332,12 @@ export function ScriptureSearch() {
   const toggleVerse = (verse: SearchResult) => {
     setSelectedVerses((prev) => {
       const exists = prev.find(
-        (v) => v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number
+        (v) => v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number,
       );
       if (exists) {
         return prev.filter(
-          (v) => !(v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number)
+          (v) =>
+            !(v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number),
         );
       }
       return [...prev, verse].sort((a, b) => a.verse_number - b.verse_number);
@@ -346,7 +356,9 @@ export function ScriptureSearch() {
           <button
             onClick={() => searchMode !== "reference" && toggleSearchMode()}
             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-              searchMode === "reference" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
+              searchMode === "reference"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-secondary"
             }`}
           >
             <BookOpen className="h-3 w-3" />
@@ -355,7 +367,9 @@ export function ScriptureSearch() {
           <button
             onClick={() => searchMode !== "semantic" && toggleSearchMode()}
             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-              searchMode === "semantic" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
+              searchMode === "semantic"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-secondary"
             }`}
           >
             <MessageSquare className="h-3 w-3" />
@@ -399,7 +413,9 @@ export function ScriptureSearch() {
           <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
             {semanticResults.map((verse, i) => {
               const isSelected = selectedVerses.some(
-                (v) => v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number
+                (v) =>
+                  v.verse_number === verse.verse_number &&
+                  v.chapter_number === verse.chapter_number,
               );
               return (
                 <div
@@ -435,7 +451,7 @@ export function ScriptureSearch() {
             {semanticResults.length === 0 && !semanticLoading && semanticQuery && (
               <div className="flex h-full items-center justify-center text-center">
                 <p className="text-xs text-muted-foreground/60">
-                  No verses found matching "{semanticQuery}"
+                  No verses found matching &quot;{semanticQuery}&quot;
                 </p>
               </div>
             )}
@@ -443,148 +459,149 @@ export function ScriptureSearch() {
         </>
       ) : (
         <>
+          {/* Breadcrumb */}
+          <div className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span className={selectedBook ? "font-medium text-foreground" : ""}>
+              {selectedBook || "Book"}
+            </span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={chapter ? "font-medium text-foreground" : ""}>
+              {chapter || "Chapter"}
+            </span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={verseStart ? "font-medium text-foreground" : ""}>
+              {verseStart ? (verseEnd ? `${verseStart}-${verseEnd}` : verseStart) : "Verse"}
+            </span>
+          </div>
 
-      {/* Breadcrumb */}
-      <div className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground">
-        <span className={selectedBook ? "font-medium text-foreground" : ""}>
-          {selectedBook || "Book"}
-        </span>
-        <ChevronRight className="h-3 w-3" />
-        <span className={chapter ? "font-medium text-foreground" : ""}>
-          {chapter || "Chapter"}
-        </span>
-        <ChevronRight className="h-3 w-3" />
-        <span className={verseStart ? "font-medium text-foreground" : ""}>
-          {verseStart ? (verseEnd ? `${verseStart}-${verseEnd}` : verseStart) : "Verse"}
-        </span>
-      </div>
+          {/* Stepped Picker */}
+          <div className="mb-3 flex gap-2">
+            {/* Book input */}
+            <div ref={bookWrapperRef} className="relative flex-1">
+              <input
+                ref={bookInputRef}
+                data-search-book
+                type="text"
+                value={selectedBook ?? bookQuery}
+                onChange={(e) => {
+                  setSelectedBook(null);
+                  setBookQuery(e.target.value);
+                  setShowBookDropdown(true);
+                  setHighlightedBookIndex(0);
+                }}
+                onFocus={() => setShowBookDropdown(true)}
+                onKeyDown={handleBookKeyDown}
+                placeholder="Book"
+                className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+              />
+              {showBookDropdown && filteredBooks.length > 0 && !selectedBook && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-card shadow-panel">
+                  {filteredBooks.map((book, i) => (
+                    <button
+                      key={book}
+                      onClick={() => handleSelectBook(book)}
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors ${
+                        i === highlightedBookIndex
+                          ? "bg-primary/10 text-primary"
+                          : "text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {book}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-      {/* Stepped Picker */}
-      <div className="mb-3 flex gap-2">
-        {/* Book input */}
-        <div ref={bookWrapperRef} className="relative flex-1">
-          <input
-            ref={bookInputRef}
-            data-search-book
-            type="text"
-            value={selectedBook ?? bookQuery}
-            onChange={(e) => {
-              setSelectedBook(null);
-              setBookQuery(e.target.value);
-              setShowBookDropdown(true);
-              setHighlightedBookIndex(0);
-            }}
-            onFocus={() => setShowBookDropdown(true)}
-            onKeyDown={handleBookKeyDown}
-            placeholder="Book"
-            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-          />
-          {showBookDropdown && filteredBooks.length > 0 && !selectedBook && (
-            <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-card shadow-panel">
-              {filteredBooks.map((book, i) => (
-                <button
-                  key={book}
-                  onClick={() => handleSelectBook(book)}
-                  className={`w-full px-3 py-2 text-left text-xs transition-colors ${
-                    i === highlightedBookIndex
-                      ? "bg-primary/10 text-primary"
-                      : "text-foreground hover:bg-secondary"
+            {/* Chapter input */}
+            <div className="relative w-24">
+              <input
+                ref={chapterInputRef}
+                type="text"
+                inputMode="numeric"
+                value={chapter}
+                disabled={!selectedBook}
+                onChange={(e) => setChapter(clampChapter(e.target.value))}
+                onKeyDown={handleChapterKeyDown}
+                placeholder={maxChapter ? `1–${maxChapter}` : "Ch"}
+                className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
+              />
+            </div>
+
+            {/* Verse start input */}
+            <div className="relative w-20">
+              <input
+                ref={verseStartInputRef}
+                type="text"
+                inputMode="numeric"
+                value={verseStart}
+                disabled={!chapterNum}
+                onChange={(e) => setVerseStart(clampVerse(e.target.value))}
+                onKeyDown={handleVerseStartKeyDown}
+                placeholder={maxVerse ? `1–${maxVerse}` : "Vs"}
+                className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
+              />
+            </div>
+
+            {/* Verse end input */}
+            <div className="relative w-20">
+              <input
+                ref={verseEndInputRef}
+                type="text"
+                inputMode="numeric"
+                value={verseEnd}
+                disabled={!verseStart}
+                onChange={(e) => setVerseEnd(clampVerse(e.target.value))}
+                onKeyDown={handleVerseEndKeyDown}
+                placeholder="End"
+                className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
+              />
+            </div>
+
+            <button
+              onClick={resetAll}
+              className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary"
+              title="Reset"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Results */}
+          <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
+            {results.map((verse) => {
+              const isSelected = selectedVerses.some(
+                (v) =>
+                  v.verse_number === verse.verse_number &&
+                  v.chapter_number === verse.chapter_number,
+              );
+              return (
+                <div
+                  key={`${verse.chapter_number}-${verse.verse_number}`}
+                  onClick={() => toggleVerse(verse)}
+                  className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-card hover:border-primary/30"
                   }`}
                 >
-                  {book}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Chapter input */}
-        <div className="relative w-24">
-          <input
-            ref={chapterInputRef}
-            type="text"
-            inputMode="numeric"
-            value={chapter}
-            disabled={!selectedBook}
-            onChange={(e) => setChapter(clampChapter(e.target.value))}
-            onKeyDown={handleChapterKeyDown}
-            placeholder={maxChapter ? `1–${maxChapter}` : "Ch"}
-            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
-          />
-        </div>
-
-        {/* Verse start input */}
-        <div className="relative w-20">
-          <input
-            ref={verseStartInputRef}
-            type="text"
-            inputMode="numeric"
-            value={verseStart}
-            disabled={!chapterNum}
-            onChange={(e) => setVerseStart(clampVerse(e.target.value))}
-            onKeyDown={handleVerseStartKeyDown}
-            placeholder={maxVerse ? `1–${maxVerse}` : "Vs"}
-            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
-          />
-        </div>
-
-        {/* Verse end input */}
-        <div className="relative w-20">
-          <input
-            ref={verseEndInputRef}
-            type="text"
-            inputMode="numeric"
-            value={verseEnd}
-            disabled={!verseStart}
-            onChange={(e) => setVerseEnd(clampVerse(e.target.value))}
-            onKeyDown={handleVerseEndKeyDown}
-            placeholder="End"
-            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-center text-xs text-foreground outline-none focus:border-primary disabled:opacity-40"
-          />
-        </div>
-
-        <button
-          onClick={resetAll}
-          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary"
-          title="Reset"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Results */}
-      <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
-        {results.map((verse) => {
-          const isSelected = selectedVerses.some(
-            (v) => v.verse_number === verse.verse_number && v.chapter_number === verse.chapter_number
-          );
-          return (
-            <div
-              key={`${verse.chapter_number}-${verse.verse_number}`}
-              onClick={() => toggleVerse(verse)}
-              className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
-                isSelected
-                  ? "border-primary bg-primary/10"
-                  : "border-border bg-card hover:border-primary/30"
-              }`}
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="min-w-[24px] text-[10px] font-bold text-primary">
-                  {verse.verse_number}
-                </span>
-                <p className="text-xs text-foreground line-clamp-2">{verse.verse_text}</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-[24px] text-[10px] font-bold text-primary">
+                      {verse.verse_number}
+                    </span>
+                    <p className="text-xs text-foreground line-clamp-2">{verse.verse_text}</p>
+                  </div>
+                </div>
+              );
+            })}
+            {results.length === 0 && !loading && (
+              <div className="flex h-full items-center justify-center text-center">
+                <p className="text-xs text-muted-foreground/60">
+                  Select a book, chapter, and verse to preview results.
+                </p>
               </div>
-            </div>
-          );
-        })}
-        {results.length === 0 && !loading && (
-          <div className="flex h-full items-center justify-center text-center">
-            <p className="text-xs text-muted-foreground/60">
-              Select a book, chapter, and verse to preview results.
-            </p>
+            )}
           </div>
-        )}
-      </div>
         </>
       )}
 
