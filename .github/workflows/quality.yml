@@ -59,6 +59,12 @@ jobs:
           sidecar/.venv/bin/pip install --upgrade pip
           sidecar/.venv/bin/pip install -r sidecar/requirements.txt
           sidecar/.venv/bin/pip install -r sidecar/requirements-dev.txt
+          sidecar/.venv/bin/pip install -r sidecar/requirements-packaging.txt
+
+      - name: Build sidecar for Rust validation
+        run: |
+          cd sidecar
+          .venv/bin/pyinstaller pneuma_sidecar.spec --noconfirm
 
       - name: Ruff check
         run: sidecar/.venv/bin/ruff check sidecar/pneuma_sidecar
