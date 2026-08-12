@@ -159,6 +159,7 @@ jobs:
           sidecar/.venv/bin/pip install --upgrade pip
           sidecar/.venv/bin/pip install -r sidecar/requirements.txt
           sidecar/.venv/bin/pip install -r sidecar/requirements-packaging.txt
+          sidecar/.venv/bin/python scripts/download_whisper_model.py --model base
           cd sidecar
           .venv/bin/pyinstaller pneuma_sidecar.spec --noconfirm
 
@@ -304,6 +305,7 @@ jobs:
           sidecar/.venv/Scripts/python.exe -m pip install --upgrade pip
           sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements.txt
           sidecar/.venv/Scripts/python.exe -m pip install -r sidecar/requirements-packaging.txt
+          sidecar/.venv/Scripts/python.exe scripts/download_whisper_model.py --model base
           Set-Location sidecar
           .venv/Scripts/python.exe -m PyInstaller pneuma_sidecar.spec --noconfirm
 

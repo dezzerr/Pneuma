@@ -31,6 +31,9 @@ export interface SidecarHandlers {
 }
 
 const DEFAULT_URL = "ws://127.0.0.1:8765";
+const RECONNECT_DELAY_MS = 750;
+const MAX_BUFFERED_PCM_BYTES = 64 * 1024;
+const MAX_PENDING_CONTROLS = 20;
 
 /**
  * Thin WebSocket client for the Python inference sidecar. Streams raw PCM
@@ -41,6 +44,8 @@ export class SidecarClient {
   private url: string;
   private handlers: SidecarHandlers;
   private manuallyClosed = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingControls: string[] = [];
 
   constructor(handlers: SidecarHandlers = {}, url: string = DEFAULT_URL) {
     this.handlers = handlers;
@@ -48,12 +53,22 @@ export class SidecarClient {
   }
 
   connect(): void {
+    if (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN) {
+      return;
+    }
     this.manuallyClosed = false;
+    this.clearReconnectTimer();
     this.handlers.onState?.("connecting");
     try {
       const ws = new WebSocket(this.url);
       ws.binaryType = "arraybuffer";
       this.ws = ws;
+
+      ws.onopen = () => {
+        if (this.ws !== ws) return;
+        for (const message of this.pendingControls) ws.send(message);
+        this.pendingControls = [];
+      };
 
       ws.onmessage = (ev) => {
         if (typeof ev.data !== "string") return;
@@ -67,16 +82,27 @@ export class SidecarClient {
           const rawState = msg.payload.state;
           // Forward all status states via onStatus
           this.handlers.onStatus?.(rawState as SidecarStatusState, msg.payload.message);
-          // Backward-compat: onState only cares about ready/connecting
-          const state = rawState === "ready" ? "ready" : "connecting";
+          // Backward-compat: onState only exposes the connection lifecycle.
+          const state: SidecarState =
+            rawState === "error"
+              ? "error"
+              : rawState === "ready" ||
+                  rawState === "deepgram_ready" ||
+                  rawState === "engine_switched"
+                ? "ready"
+                : "connecting";
           this.handlers.onState?.(state, msg.payload.message);
         } else if (msg.event_type === "TRANSCRIPT_CHUNK") {
           this.handlers.onTranscript?.(msg.payload);
         }
       };
 
-      ws.onerror = () => this.handlers.onState?.("error");
+      ws.onerror = () => {
+        if (this.ws === ws) this.handlers.onState?.("error");
+      };
       ws.onclose = () => {
+        if (this.ws !== ws) return;
+        this.ws = null;
         this.handlers.onState?.("closed");
         if (!this.manuallyClosed) this.scheduleReconnect();
       };
@@ -87,24 +113,38 @@ export class SidecarClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.manuallyClosed) return;
-    setTimeout(() => {
+    if (this.manuallyClosed || this.reconnectTimer !== null) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (!this.manuallyClosed) this.connect();
-    }, 1500);
+    }, RECONNECT_DELAY_MS);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   /** Send a chunk of Int16 PCM audio to the sidecar. */
   sendPcm(buffer: ArrayBuffer): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (
+      this.ws &&
+      this.ws.readyState === WebSocket.OPEN &&
+      (this.ws.bufferedAmount ?? 0) < MAX_BUFFERED_PCM_BYTES
+    ) {
       this.ws.send(buffer);
     }
   }
 
   /** Send a JSON control message (e.g. reset). */
   sendControl(message: Record<string, unknown>): void {
+    const serialized = JSON.stringify(message);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      this.ws.send(serialized);
+      return;
     }
+    this.pendingControls.push(serialized);
+    this.pendingControls = this.pendingControls.slice(-MAX_PENDING_CONTROLS);
   }
 
   /** Switch the sidecar transcription engine (cloud | local). */
@@ -128,6 +168,8 @@ export class SidecarClient {
 
   close(): void {
     this.manuallyClosed = true;
+    this.clearReconnectTimer();
+    this.pendingControls = [];
     this.ws?.close();
     this.ws = null;
   }

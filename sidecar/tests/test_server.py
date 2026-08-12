@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from pneuma_sidecar.server import (
+    PARTIAL_INTERVAL_MS,
     Session,
     TranscriptionEngine,
     Utterance,
@@ -170,6 +171,50 @@ class TestSessionVAD:
         await session.handle_pcm(b"")
         assert session.utt.total_samples == 0
 
+    @pytest.mark.asyncio
+    async def test_slow_partial_does_not_block_audio_ingestion(self):
+        ws, _ = make_fake_ws()
+        engine = make_mock_engine()
+
+        async def slow_transcribe(_audio):
+            await asyncio.sleep(0.15)
+            return "john three sixteen", 0.95
+
+        engine.transcribe = AsyncMock(side_effect=slow_transcribe)
+        session = Session(ws, engine)
+
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        await session.handle_pcm(speech_pcm(PARTIAL_INTERVAL_MS + 100))
+        await session.handle_pcm(speech_pcm(100))
+
+        # Whisper runs in a background task; receiving the next audio frame is
+        # independent of the simulated inference latency.
+        assert loop.time() - started < 0.05
+        assert session.utt.duration_ms() >= PARTIAL_INTERVAL_MS + 200
+        await asyncio.sleep(0.2)
+
+    @pytest.mark.asyncio
+    async def test_only_one_partial_is_queued_at_a_time(self):
+        ws, _ = make_fake_ws()
+        engine = make_mock_engine()
+        release = asyncio.Event()
+
+        async def blocked_transcribe(_audio):
+            await release.wait()
+            return "partial", 0.8
+
+        engine.transcribe = AsyncMock(side_effect=blocked_transcribe)
+        session = Session(ws, engine)
+
+        await session.handle_pcm(speech_pcm(PARTIAL_INTERVAL_MS + 100))
+        await session.handle_pcm(speech_pcm(PARTIAL_INTERVAL_MS + 100))
+        await asyncio.sleep(0)
+
+        assert engine.transcribe.await_count == 1
+        release.set()
+        await asyncio.sleep(0.05)
+
 
 # ---------------------------------------------------------------------------
 # Session — final transcript emission with scripture hold
@@ -187,8 +232,8 @@ class TestSessionFinalTranscript:
         await session.handle_pcm(speech_pcm(500))
         await session.handle_pcm(silence_pcm(800))
 
-        # Wait for hold timer (750ms default)
-        await asyncio.sleep(0.9)
+        # Wait for the brief scripture-correction hold.
+        await asyncio.sleep(0.4)
 
         # Should have sent at least one message
         assert len(sent) > 0
@@ -240,8 +285,12 @@ class TestSessionControl:
         ws, sent = make_fake_ws()
         engine = make_mock_engine()
         session = Session(ws, engine, deepgram_key="test-key")
-        with patch.object(session, "_switch_engine", new_callable=AsyncMock) as mock_switch:
-            await session.handle_control(json.dumps({"type": "config", "engine": "cloud"}))
+        with patch.object(
+            session, "_switch_engine", new_callable=AsyncMock
+        ) as mock_switch:
+            await session.handle_control(
+                json.dumps({"type": "config", "engine": "cloud"})
+            )
             mock_switch.assert_called_once_with("cloud")
         # Should emit engine_switched status (via _switch_engine, but we mocked it)
         # So just verify the switch was called
@@ -251,7 +300,9 @@ class TestSessionControl:
         ws, _ = make_fake_ws()
         engine = make_mock_engine()
         session = Session(ws, engine)
-        await session.handle_control(json.dumps({"type": "config", "deepgram_key": "new-key"}))
+        await session.handle_control(
+            json.dumps({"type": "config", "deepgram_key": "new-key"})
+        )
         assert session._deepgram_key == "new-key"
 
     @pytest.mark.asyncio
@@ -262,7 +313,9 @@ class TestSessionControl:
         import pneuma_sidecar.server as server_mod
 
         original = server_mod.SCRIPTURE_HOLD_MS
-        await session.handle_control(json.dumps({"type": "config", "inference_delay_ms": 1000}))
+        await session.handle_control(
+            json.dumps({"type": "config", "inference_delay_ms": 1000})
+        )
         assert server_mod.SCRIPTURE_HOLD_MS == 1000
         server_mod.SCRIPTURE_HOLD_MS = original  # Restore
 
@@ -273,7 +326,9 @@ class TestSessionControl:
         mock_semantic = MagicMock()
         mock_semantic.threshold = 0.7
         session = Session(ws, engine, semantic=mock_semantic)
-        await session.handle_control(json.dumps({"type": "config", "semantic_threshold": 0.85}))
+        await session.handle_control(
+            json.dumps({"type": "config", "semantic_threshold": 0.85})
+        )
         assert mock_semantic.threshold == 0.85
 
     @pytest.mark.asyncio
@@ -396,13 +451,38 @@ class TestMakeHandler:
 
 class TestSemanticFallback:
     @pytest.mark.asyncio
+    async def test_final_transcript_precedes_slow_semantic_search(self):
+        ws, sent = make_fake_ws()
+        engine = make_mock_engine()
+        engine.transcribe = AsyncMock(return_value=("the lord is my shepherd", 0.9))
+        mock_semantic = MagicMock()
+
+        async def slow_ready():
+            await asyncio.sleep(0.15)
+
+        mock_semantic.ensure_ready = AsyncMock(side_effect=slow_ready)
+        mock_semantic.search = AsyncMock(return_value=[])
+        session = Session(ws, engine, semantic=mock_semantic)
+
+        await session.handle_pcm(speech_pcm(500))
+        await session.handle_pcm(silence_pcm(800))
+        await asyncio.sleep(0.03)
+
+        finals = [json.loads(m) for m in sent if "TRANSCRIPT_CHUNK" in m]
+        assert finals[-1]["payload"]["raw_text"] == "the lord is my shepherd"
+        assert finals[-1]["payload"]["detected_scriptures"] == []
+        await asyncio.sleep(0.2)
+
+    @pytest.mark.asyncio
     async def test_semantic_search_on_regex_miss(self):
         ws, sent = make_fake_ws()
         engine = make_mock_engine()
         engine.transcribe = AsyncMock(return_value=("the lord is my shepherd", 0.9))
         mock_semantic = MagicMock()
         mock_semantic.ensure_ready = AsyncMock()
-        mock_semantic.search = AsyncMock(return_value=[{"book_id": 19, "book_name": "Psalms"}])
+        mock_semantic.search = AsyncMock(
+            return_value=[{"book_id": 19, "book_name": "Psalms"}]
+        )
         session = Session(ws, engine, semantic=mock_semantic)
 
         await session.handle_pcm(speech_pcm(500))
@@ -423,7 +503,9 @@ class TestSemanticFallback:
         session = Session(ws, engine, semantic=mock_semantic)
 
         # Pre-populate cache
-        session._semantic_cache.put("the lord is my shepherd", [{"book_id": 19, "cached": True}])
+        session._semantic_cache.put(
+            "the lord is my shepherd", [{"book_id": 19, "cached": True}]
+        )
 
         await session.handle_pcm(speech_pcm(500))
         await session.handle_pcm(silence_pcm(800))

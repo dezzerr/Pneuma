@@ -106,7 +106,7 @@ describe("SidecarClient", () => {
       expect(handlers.onTranscript).not.toHaveBeenCalled();
     });
 
-    it("maps deepgram_ready status to connecting for onState", () => {
+    it("maps deepgram_ready status to ready for onState", () => {
       client.connect();
       const ws = getMockWs();
 
@@ -117,7 +117,7 @@ describe("SidecarClient", () => {
       ws.onmessage?.({ data: msg } as MessageEvent);
 
       expect(handlers.onStatus).toHaveBeenCalledWith("deepgram_ready", undefined);
-      expect(handlers.onState).toHaveBeenCalledWith("connecting", undefined);
+      expect(handlers.onState).toHaveBeenCalledWith("ready", undefined);
     });
   });
 
@@ -167,6 +167,18 @@ describe("SidecarClient", () => {
       client.close();
       client.sendPcm(new ArrayBuffer(16));
     });
+
+    it("drops PCM instead of growing an unhealthy browser backlog", () => {
+      client.connect();
+      flushConnect();
+      const ws = getMockWs();
+      Object.defineProperty(ws, "bufferedAmount", { value: 64 * 1024, configurable: true });
+      const sendSpy = vi.spyOn(ws, "send");
+
+      client.sendPcm(new ArrayBuffer(3_200));
+
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("sendControl", () => {
@@ -178,6 +190,18 @@ describe("SidecarClient", () => {
 
       client.sendControl({ type: "reset" });
       expect(sendSpy).toHaveBeenCalledWith(JSON.stringify({ type: "reset" }));
+    });
+
+    it("queues control messages until the connection opens", () => {
+      client.connect();
+      const ws = getMockWs();
+      const sendSpy = vi.spyOn(ws, "send");
+
+      client.sendControl({ type: "config", engine: "local" });
+      expect(sendSpy).not.toHaveBeenCalled();
+
+      flushConnect();
+      expect(sendSpy).toHaveBeenCalledWith(JSON.stringify({ type: "config", engine: "local" }));
     });
   });
 
@@ -246,7 +270,11 @@ describe("SidecarClient", () => {
       client.close();
       ws.onclose?.(new CloseEvent("close"));
 
-      expect(handlers.onState).toHaveBeenCalledWith("closed");
+      vi.advanceTimersByTime(1_000);
+      expect(
+        (client as unknown as { reconnectTimer: ReturnType<typeof setTimeout> | null })
+          .reconnectTimer,
+      ).toBeNull();
     });
   });
 });

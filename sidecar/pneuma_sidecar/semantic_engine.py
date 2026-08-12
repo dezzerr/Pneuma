@@ -129,8 +129,15 @@ class SemanticEngine:
             raise FileNotFoundError(f"Tokenizer not found: {tokenizer_file}")
 
         print("[pneuma-sidecar] Loading ONNX embedding model...", file=sys.stderr)
+        session_options = ort.SessionOptions()
+        # ONNX otherwise uses most logical cores by default. Whisper and the
+        # WebView need predictable headroom, especially on 4-8 core PCs.
+        available_cpus = os.cpu_count() or 4
+        session_options.intra_op_num_threads = max(1, min(4, available_cpus - 1))
+        session_options.inter_op_num_threads = 1
         self._session = ort.InferenceSession(
             onnx_file,
+            sess_options=session_options,
             providers=["CPUExecutionProvider"],
         )
         self._tokenizer = Tokenizer.from_file(tokenizer_file)
@@ -152,11 +159,17 @@ class SemanticEngine:
             return
 
         if not os.path.exists(self.embeddings_path):
-            raise FileNotFoundError(f"Embeddings parquet not found: {self.embeddings_path}")
+            raise FileNotFoundError(
+                f"Embeddings parquet not found: {self.embeddings_path}"
+            )
 
-        print("[pneuma-sidecar] Loading verse embeddings into LanceDB...", file=sys.stderr)
+        print(
+            "[pneuma-sidecar] Loading verse embeddings into LanceDB...", file=sys.stderr
+        )
         table_arrow = pq.read_table(self.embeddings_path)
-        self._table = self._db.create_table("bible_verses", data=table_arrow, mode="overwrite")
+        self._table = self._db.create_table(
+            "bible_verses", data=table_arrow, mode="overwrite"
+        )
         self._indexed = True
         print(
             f"[pneuma-sidecar] LanceDB indexed ({self._table.count_rows()} verses).",

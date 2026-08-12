@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOperatorStore } from "../store";
 import { Loader2, HardDrive, Play, Pause, Square } from "lucide-react";
 import type { AudioDevice } from "@/shared/types";
@@ -14,9 +14,7 @@ export function AudioMonitor() {
     setSelectedDevice,
     engineStatus,
     setEngineStatus,
-    setVuLevel,
     ingestTranscript,
-    vuLevel,
     startSession,
     pauseSession,
     stopSession,
@@ -26,6 +24,12 @@ export function AudioMonitor() {
   // Live capture pipeline (mic -> VU + 16kHz PCM) and sidecar WebSocket.
   const pipelineRef = useRef<AudioPipeline | null>(null);
   const sidecarRef = useRef<SidecarClient | null>(null);
+  // The meter is intentionally local state. Putting a 20 fps signal in the
+  // global Zustand store made every operator panel re-render on each frame.
+  const [vuLevel, setVuLevel] = useState(0);
+  const [sidecarState, setSidecarState] = useState<"idle" | "connecting" | "ready" | "error">(
+    "idle",
+  );
 
   // Enumerate real system input devices. Requesting permission first unlocks
   // device labels (browsers hide them until mic access is granted).
@@ -76,14 +80,41 @@ export function AudioMonitor() {
       pipelineRef.current = null;
       sidecarRef.current?.close();
       sidecarRef.current = null;
+      setVuLevel(0);
+      setSidecarState("idle");
       return;
     }
 
+    let cancelled = false;
+    let pipelineStarted = false;
+
+    const startPipeline = () => {
+      if (cancelled || pipelineStarted) return;
+      pipelineStarted = true;
+      const pipeline = new AudioPipeline({
+        onLevel: setVuLevel,
+        onPcm: (buf) => sidecarRef.current?.sendPcm(buf),
+        onError: () => setEngineStatus("error"),
+      });
+      pipelineRef.current = pipeline;
+      void pipeline.start(selectedDeviceId);
+    };
+
+    setSidecarState("connecting");
     const sidecar = new SidecarClient({
       onTranscript: (chunk) => ingestTranscript(chunk),
       onState: (state) => {
-        if (state === "error") {
+        if (cancelled) return;
+        if (state === "ready") {
+          setSidecarState("ready");
+          // Do not capture speech until the model is actually listening. On a
+          // cold Windows start, model loading can take longer than UI startup.
+          startPipeline();
+        } else if (state === "error") {
+          setSidecarState("error");
           console.error("[AudioMonitor] Sidecar connection error.");
+        } else {
+          setSidecarState("connecting");
         }
       },
       onStatus: (state: SidecarStatusState, message?: string) => {
@@ -94,17 +125,15 @@ export function AudioMonitor() {
     sidecar.connect();
     // Private beta is intentionally local-first; cloud transcription is not a supported path yet.
     sidecar.setEngineMode("local");
-
-    const pipeline = new AudioPipeline({
-      onLevel: (level) => setVuLevel(level),
-      onPcm: (buf) => sidecar.sendPcm(buf),
-      onError: () => setEngineStatus("error"),
+    sidecar.pushSettings({
+      inference_delay_ms: appSettings.inference_delay_ms,
+      semantic_threshold: appSettings.semantic_threshold,
+      hot_words: appSettings.hot_words,
     });
-    pipelineRef.current = pipeline;
-    pipeline.start(selectedDeviceId);
 
     return () => {
-      pipeline.stop();
+      cancelled = true;
+      pipelineRef.current?.stop();
       sidecar.close();
       pipelineRef.current = null;
       sidecarRef.current = null;
@@ -114,13 +143,11 @@ export function AudioMonitor() {
 
   // Push settings changes to the running sidecar
   useEffect(() => {
-    if (sidecarRef.current?.isOpen()) {
-      sidecarRef.current.pushSettings({
-        inference_delay_ms: appSettings.inference_delay_ms,
-        semantic_threshold: appSettings.semantic_threshold,
-        hot_words: appSettings.hot_words,
-      });
-    }
+    sidecarRef.current?.pushSettings({
+      inference_delay_ms: appSettings.inference_delay_ms,
+      semantic_threshold: appSettings.semantic_threshold,
+      hot_words: appSettings.hot_words,
+    });
   }, [appSettings.inference_delay_ms, appSettings.semantic_threshold, appSettings.hot_words]);
 
   // Single toggle: Start → Pause → Resume. Stop is a separate button.
@@ -130,8 +157,7 @@ export function AudioMonitor() {
     } else if (engineStatus === "paused") {
       startSession();
     } else {
-      setEngineStatus("starting");
-      setTimeout(() => startSession(), 800);
+      startSession();
     }
   };
 
@@ -208,10 +234,28 @@ export function AudioMonitor() {
 
       <div
         className="flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground"
-        title="Private beta uses local transcription"
+        title={
+          sidecarState === "ready"
+            ? "Local transcription is ready"
+            : sidecarState === "error"
+              ? "The local transcription engine is reconnecting"
+              : "Waiting for the local transcription model"
+        }
       >
-        <HardDrive className="h-3 w-3" />
-        <span>Local</span>
+        {sidecarState === "connecting" ? (
+          <Loader2 className="h-3 w-3 animate-spin text-warning" />
+        ) : (
+          <HardDrive className={`h-3 w-3 ${sidecarState === "error" ? "text-destructive" : ""}`} />
+        )}
+        <span>
+          {sidecarState === "ready"
+            ? "AI Ready"
+            : sidecarState === "connecting"
+              ? "AI Loading"
+              : sidecarState === "error"
+                ? "Reconnecting"
+                : "Local"}
+        </span>
       </div>
     </div>
   );

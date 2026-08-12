@@ -5,6 +5,7 @@
 // One getUserMedia stream feeds both paths.
 
 const WORKLET_URL = "/worklets/pcm-processor.js";
+const METER_INTERVAL_MS = 50; // 20 fps is smooth without repainting the UI continuously.
 
 export interface AudioPipelineHandlers {
   onLevel?: (level: number) => void; // 0..100
@@ -17,7 +18,9 @@ export class AudioPipeline {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private worklet: AudioWorkletNode | null = null;
+  private silentSink: GainNode | null = null;
   private raf: number | null = null;
+  private lastMeterAt = 0;
   private handlers: AudioPipelineHandlers;
 
   constructor(handlers: AudioPipelineHandlers = {}) {
@@ -28,7 +31,18 @@ export class AudioPipeline {
     this.stop();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: {
+          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+          // Windows audio interfaces frequently expose stereo inputs even when
+          // only one channel carries the microphone. Ask the browser for mono,
+          // while the worklet still handles multi-channel devices defensively.
+          channelCount: { ideal: 1 },
+          // Keep the PCM contract consistent across CoreAudio and WebView2.
+          // Platform DSP can otherwise produce very different gain and gating.
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
       });
       this.stream = stream;
 
@@ -38,7 +52,7 @@ export class AudioPipeline {
 
       // VU metering path
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
+      analyser.fftSize = 256;
       this.analyser = analyser;
       source.connect(analyser);
       this.startMeter();
@@ -53,8 +67,16 @@ export class AudioPipeline {
           this.handlers.onPcm?.(ev.data as ArrayBuffer);
         };
         this.worklet = worklet;
+        const silentSink = ctx.createGain();
+        silentSink.gain.value = 0;
+        this.silentSink = silentSink;
         source.connect(worklet);
-        // Worklet has no audible output; do not connect to destination.
+        // Web Audio is pull-driven. WebView2 may stop processing a graph branch
+        // that has no destination, even though its worklet posts messages.
+        // A zero-gain sink keeps capture scheduled without audible monitoring.
+        worklet.connect(silentSink);
+        silentSink.connect(ctx.destination);
+        if (ctx.state === "suspended") await ctx.resume();
       } catch (err) {
         // VU still works even if the worklet fails to load.
         console.error("[AudioPipeline] Worklet load failed:", err);
@@ -71,7 +93,12 @@ export class AudioPipeline {
     const analyser = this.analyser;
     if (!analyser) return;
     const data = new Uint8Array(analyser.frequencyBinCount);
-    const tick = () => {
+    const tick = (now: number) => {
+      if (now - this.lastMeterAt < METER_INTERVAL_MS) {
+        this.raf = requestAnimationFrame(tick);
+        return;
+      }
+      this.lastMeterAt = now;
       analyser.getByteTimeDomainData(data);
       let sum = 0;
       for (let i = 0; i < data.length; i++) {
@@ -82,17 +109,20 @@ export class AudioPipeline {
       this.handlers.onLevel?.(Math.min(100, rms * 250));
       this.raf = requestAnimationFrame(tick);
     };
-    tick();
+    this.raf = requestAnimationFrame(tick);
   }
 
   stop(): void {
     if (this.raf !== null) cancelAnimationFrame(this.raf);
     this.raf = null;
+    this.lastMeterAt = 0;
     if (this.worklet) {
       this.worklet.port.onmessage = null;
       this.worklet.disconnect();
       this.worklet = null;
     }
+    this.silentSink?.disconnect();
+    this.silentSink = null;
     this.analyser?.disconnect();
     this.analyser = null;
     this.stream?.getTracks().forEach((t) => t.stop());

@@ -1,8 +1,10 @@
 // AudioWorklet: downsamples mic audio to 16 kHz mono Int16 PCM and posts
 // ~100ms buffers back to the main thread for streaming to the Pneuma sidecar.
 //
-// The browser AudioContext may run at 44.1/48 kHz; we resample to the fixed
-// 16 kHz contract expected by Whisper using linear interpolation.
+// The browser AudioContext may run at 44.1/48 kHz. We downsample to Whisper's
+// fixed 16 kHz contract using a streaming box filter. Averaging each source
+// window suppresses high-frequency aliasing that linear point sampling can
+// introduce, particularly with 48 kHz Windows audio devices.
 
 const TARGET_RATE = 16000;
 const FRAME_SAMPLES = 1600; // 100ms @ 16kHz
@@ -11,42 +13,57 @@ class PCMProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this.inputRate = (options && options.processorOptions && options.processorOptions.inputSampleRate) || sampleRate;
-    this.ratio = this.inputRate / TARGET_RATE;
-    this.fraction = 0; // running fractional read position between quanta
+    this.phase = 0;
+    this.sum = 0;
+    this.count = 0;
     this.out = new Int16Array(FRAME_SAMPLES);
     this.outIdx = 0;
-    this.last = 0; // last input sample, for interpolation continuity
   }
 
   process(inputs) {
     const input = inputs[0];
     if (!input || input.length === 0) return true;
-    const channel = input[0];
-    if (!channel || channel.length === 0) return true;
+    const frameLength = input[0] ? input[0].length : 0;
+    if (frameLength === 0) return true;
 
-    let pos = this.fraction;
-    while (pos < channel.length) {
-      const i = Math.floor(pos);
-      const frac = pos - i;
-      const a = i > 0 ? channel[i - 1] : this.last;
-      const b = channel[i];
-      const sample = a + (b - a) * frac;
-
-      // Float [-1,1] -> Int16
-      const clamped = Math.max(-1, Math.min(1, sample));
-      this.out[this.outIdx++] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
-
-      if (this.outIdx >= FRAME_SAMPLES) {
-        // Transfer a copy so the buffer can be reused.
-        const frame = this.out.slice(0);
-        this.port.postMessage(frame.buffer, [frame.buffer]);
-        this.outIdx = 0;
+    // Some USB mixers expose two channels but put the microphone on channel 2.
+    // Select the channel with the most signal for this render quantum instead
+    // of blindly reading channel 1.
+    let channel = input[0];
+    let bestEnergy = -1;
+    for (const candidate of input) {
+      if (!candidate || candidate.length === 0) continue;
+      let energy = 0;
+      for (let i = 0; i < candidate.length; i++) energy += candidate[i] * candidate[i];
+      if (energy > bestEnergy) {
+        bestEnergy = energy;
+        channel = candidate;
       }
-      pos += this.ratio;
     }
 
-    this.last = channel[channel.length - 1];
-    this.fraction = pos - channel.length;
+    for (let i = 0; i < channel.length; i++) {
+      this.sum += channel[i];
+      this.count += 1;
+      this.phase += TARGET_RATE;
+
+      if (this.phase < this.inputRate) continue;
+      this.phase -= this.inputRate;
+
+      const sample = this.count > 0 ? this.sum / this.count : 0;
+      const clamped = Math.max(-1, Math.min(1, sample));
+      this.out[this.outIdx++] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+      this.sum = 0;
+      this.count = 0;
+
+      if (this.outIdx >= FRAME_SAMPLES) {
+        // Transfer ownership instead of copying on the audio render thread.
+        const frame = this.out;
+        this.port.postMessage(frame.buffer, [frame.buffer]);
+        this.out = new Int16Array(FRAME_SAMPLES);
+        this.outIdx = 0;
+      }
+    }
+
     return true;
   }
 }

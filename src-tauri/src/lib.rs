@@ -2,7 +2,7 @@ mod commands;
 mod db;
 
 use commands::ndi::NdiState;
-use commands::sidecar::SidecarProcess;
+use commands::sidecar::{SidecarConfig, SidecarProcess};
 use rusqlite::Connection;
 use serde::Deserialize;
 use tauri::Manager;
@@ -58,8 +58,12 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            if let Err(error) = std::fs::create_dir_all(&app_data_dir) {
+                eprintln!("Failed to create app data directory: {error}");
+            }
             let lance_path = app_data_dir.join("lancedb");
             let lance = lance_path.to_string_lossy().to_string();
+            let sidecar_log_path = app_data_dir.join("pneuma-sidecar.log");
 
             // Dev: resources are in the repo's resources/ dir; release: bundled.
             let (emb, onnx, resource_dir) = if cfg!(debug_assertions) {
@@ -110,20 +114,40 @@ pub fn run() {
             // via the async path, so we open a temporary connection here).
             let db_path = db::get_db_path(app.handle());
             let model_tier = read_saved_settings(&db_path);
+            let whisper_model_dir = if cfg!(debug_assertions) {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("..")
+                    .join("resources")
+                    .join("models")
+                    .join(format!("faster-whisper-{model_tier}"))
+            } else {
+                resource_dir
+                    .clone()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("models")
+                    .join(format!("faster-whisper-{model_tier}"))
+            };
+            let whisper_model_path = if whisper_model_dir.join("model.bin").exists() {
+                whisper_model_dir.to_string_lossy().to_string()
+            } else {
+                String::new()
+            };
             // Deepgram key: use env var at startup; frontend pushes keychain key
             // to sidecar at runtime via WebSocket (avoids blocking main thread
             // with synchronous Keychain access during setup).
             let deepgram_key = std::env::var("DEEPGRAM_API_KEY").unwrap_or_default();
 
-            if let Some(child) = commands::sidecar::spawn_sidecar(
-                emb,
-                lance,
-                onnx,
+            if let Some(child) = commands::sidecar::spawn_sidecar(SidecarConfig {
+                embeddings_path: emb,
+                lance_path: lance,
+                onnx_model_path: onnx,
                 engine_mode,
                 deepgram_key,
                 resource_dir,
                 model_tier,
-            ) {
+                whisper_model_path,
+                log_path: sidecar_log_path,
+            }) {
                 let state = app.state::<SidecarProcess>();
                 *state.0.lock().unwrap() = Some(child);
             }

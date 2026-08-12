@@ -65,6 +65,7 @@ the translation marketplace, and NDI are not part of this beta.
   **Run anyway** after verifying the installer source.
 - Confirm Pneuma launches without Python, Node, Rust, or other developer tools.
 - Confirm the bundled `pneuma-sidecar.exe` reaches the ready state.
+- Disconnect the network on a clean install and confirm the bundled model still reaches **AI Ready**.
 - Confirm KJV reference search returns verses and use **Launch** to open the
   Presentation window.
 - Grant microphone permission, select the intended input, and check that the
@@ -87,3 +88,5 @@ the translation marketplace, and NDI are not part of this beta.
 - Test microphone denial/no input and confirm the app remains usable.
 - Record Windows version, PC model/RAM, microphone/interface, installer type,
   sidecar errors, and any SmartScreen message.
+- Attach `pneuma-sidecar.log` from the Pneuma application-data directory and
+  report the p95 `rtf` value for any transcription-latency issue.

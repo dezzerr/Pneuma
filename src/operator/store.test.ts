@@ -74,6 +74,40 @@ describe("operator store", () => {
       expect(state.transcriptChunks[0].raw_text).toBe("John 3:16");
     });
 
+    it("replaces an evolving interim chunk instead of duplicating it", () => {
+      useOperatorStore
+        .getState()
+        .ingestTranscript(makeChunk({ raw_text: "John three", is_final: false }));
+      useOperatorStore
+        .getState()
+        .ingestTranscript(makeChunk({ raw_text: "John three sixteen", is_final: false }));
+      useOperatorStore
+        .getState()
+        .ingestTranscript(makeChunk({ raw_text: "John 3:16", is_final: true }));
+
+      const chunks = useOperatorStore.getState().transcriptChunks;
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toMatchObject({ raw_text: "John 3:16", is_final: true });
+    });
+
+    it("merges a delayed semantic detection into its final transcript", () => {
+      useOperatorStore
+        .getState()
+        .ingestTranscript(
+          makeChunk({ raw_text: "the lord is my shepherd", detected_scriptures: [] }),
+        );
+      useOperatorStore.getState().ingestTranscript(
+        makeChunk({
+          raw_text: "the lord is my shepherd",
+          detected_scriptures: [makeScripture({ match_type: "SEMANTIC" })],
+        }),
+      );
+
+      const chunks = useOperatorStore.getState().transcriptChunks;
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].detected_scriptures).toHaveLength(1);
+    });
+
     it("creates verse queue items for detected scriptures", () => {
       const chunk = makeChunk({
         detected_scriptures: [makeScripture()],

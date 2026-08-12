@@ -178,6 +178,37 @@ const DEFAULT_SAAS_STATE: SaaSState = {
   },
 };
 
+const MAX_TRANSCRIPT_CHUNKS = 100;
+
+/** Keep one evolving interim line instead of appending the whole utterance repeatedly. */
+function mergeTranscriptChunk(
+  chunks: TranscriptChunk[],
+  chunk: TranscriptChunk,
+): TranscriptChunk[] {
+  const next = [...chunks];
+  const last = next[next.length - 1];
+  if (chunk.is_final && chunk.detected_scriptures.length > 0) {
+    // Semantic detection can arrive after the final text so expensive first-
+    // use indexing never delays the transcript. Merge that follow-up in place.
+    let existingIndex = -1;
+    for (let i = next.length - 1; i >= Math.max(0, next.length - 10); i--) {
+      if (
+        next[i].is_final &&
+        next[i].raw_text === chunk.raw_text &&
+        next[i].detected_scriptures.length === 0
+      ) {
+        existingIndex = i;
+        break;
+      }
+    }
+    if (existingIndex >= 0) next[existingIndex] = chunk;
+    else if (last && !last.is_final) next[next.length - 1] = chunk;
+    else next.push(chunk);
+  } else if (last && !last.is_final) next[next.length - 1] = chunk;
+  else next.push(chunk);
+  return next.slice(-MAX_TRANSCRIPT_CHUNKS);
+}
+
 export const useOperatorStore = create<OperatorState>((set) => ({
   audioDevices: [],
   selectedDeviceId: null,
@@ -218,7 +249,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     theme: DEFAULT_THEME,
     selected_audio_device: null,
     model_tier: "base",
-    inference_delay_ms: 750,
+    inference_delay_ms: 300,
     semantic_threshold: 0.7,
     hot_words: [],
     active_translation: "KJV",
@@ -266,7 +297,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
 
   addTranscriptChunk: (chunk) =>
     set((state) => ({
-      transcriptChunks: [...state.transcriptChunks.slice(-99), chunk],
+      transcriptChunks: mergeTranscriptChunk(state.transcriptChunks, chunk),
     })),
 
   // Adds a transcript chunk and spawns pending verse-queue items for any
@@ -289,7 +320,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     const stageTarget = exactMatch ?? null;
 
     set((state) => ({
-      transcriptChunks: [...state.transcriptChunks.slice(-99), chunk],
+      transcriptChunks: mergeTranscriptChunk(state.transcriptChunks, chunk),
       verseQueue: [...newItems, ...state.verseQueue],
       recentDetections: [...newItems, ...state.recentDetections].slice(0, 50),
       stagedItem: stageTarget ?? state.stagedItem,
@@ -481,6 +512,9 @@ export const useOperatorStore = create<OperatorState>((set) => ({
         return;
       }
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
+      // 750ms was the private-beta hardcoded value and was never user-facing.
+      // Migrate it to the lower-latency default while preserving other values.
+      if (parsed.inference_delay_ms === 750) parsed.inference_delay_ms = 300;
       set((state) => ({
         appSettings: { ...state.appSettings, ...parsed },
         settingsLoaded: true,

@@ -30,6 +30,11 @@ def main() -> None:
         help="Faster-Whisper model size: tiny | base | small",
     )
     parser.add_argument(
+        "--model-path",
+        default="",
+        help="Bundled Faster-Whisper model directory (avoids a first-run download)",
+    )
+    parser.add_argument(
         "--embeddings-path",
         default="",
         help="Path to bible_embeddings.parquet for semantic search",
@@ -55,6 +60,12 @@ def main() -> None:
         default="",
         help="Deepgram API key (required for cloud engine mode)",
     )
+    parser.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=0,
+        help="Whisper CPU threads (0 uses the CTranslate2 default)",
+    )
     args = parser.parse_args()
 
     try:
@@ -68,6 +79,8 @@ def main() -> None:
                 args.onnx_model_path,
                 args.engine,
                 args.deepgram_key,
+                args.cpu_threads,
+                args.model_path,
             )
         )
     except KeyboardInterrupt:
