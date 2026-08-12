@@ -166,9 +166,7 @@ class TranscriptionEngine:
         text = " ".join(t for t in texts if t).strip()
         if logprobs:
             # avg_logprob is negative; map to a 0..1 confidence.
-            confidence = float(
-                min(1.0, max(0.0, math.exp(sum(logprobs) / len(logprobs))))
-            )
+            confidence = float(min(1.0, max(0.0, math.exp(sum(logprobs) / len(logprobs)))))
         else:
             confidence = 0.0
         return text, confidence
@@ -246,9 +244,7 @@ class Session:
         # Cloud mode: forward PCM to Deepgram; transcripts arrive via callback
         if self.engine_mode == "cloud" and self._deepgram_key:
             if self._deepgram is None:
-                self._deepgram = DeepgramEngine(
-                    self._deepgram_key, self._deepgram_model
-                )
+                self._deepgram = DeepgramEngine(self._deepgram_key, self._deepgram_model)
             if not self._deepgram.is_connected:
                 await self._deepgram.connect(
                     on_transcript=self._on_deepgram_transcript,
@@ -294,9 +290,7 @@ class Session:
             self.utt.reset()
             self._preroll.clear()
             self._utterance_id += 1
-            self._schedule_transcription(
-                audio, is_final=True, utterance_id=utterance_id
-            )
+            self._schedule_transcription(audio, is_final=True, utterance_id=utterance_id)
             return
 
         # Emit an interim transcript periodically for responsiveness. If the
@@ -328,9 +322,7 @@ class Session:
         if audio.size < _ms_to_samples(MIN_UTTERANCE_MS):
             return
         task = asyncio.create_task(
-            self._transcribe_snapshot(
-                audio, is_final=is_final, utterance_id=utterance_id
-            )
+            self._transcribe_snapshot(audio, is_final=is_final, utterance_id=utterance_id)
         )
         self._inference_tasks.add(task)
         if not is_final:
@@ -432,9 +424,7 @@ class Session:
 
         await self._hold_final(text, confidence, scriptures)
 
-    async def _hold_final(
-        self, text: str, confidence: float, scriptures: list[dict]
-    ) -> None:
+    async def _hold_final(self, text: str, confidence: float, scriptures: list[dict]) -> None:
         """Store pending detection and start/reset the hold timer."""
         # If we already have a pending chunk, emit it now (without scriptures)
         if self._hold_task is not None:
@@ -481,9 +471,7 @@ class Session:
             self._pending_confidence = 0.0
             self._pending_scriptures = []
 
-    async def _on_deepgram_transcript(
-        self, text: str, confidence: float, is_final: bool
-    ) -> None:
+    async def _on_deepgram_transcript(self, text: str, confidence: float, is_final: bool) -> None:
         """Callback for Deepgram streaming transcripts."""
         if not is_final:
             await _send(self.ws, _transcript_message(text, confidence, is_final=False))
@@ -513,9 +501,7 @@ class Session:
 
         if mode == "cloud" and self._deepgram_key:
             if self._deepgram is None:
-                self._deepgram = DeepgramEngine(
-                    self._deepgram_key, self._deepgram_model
-                )
+                self._deepgram = DeepgramEngine(self._deepgram_key, self._deepgram_model)
             await self._deepgram.connect(
                 on_transcript=self._on_deepgram_transcript,
                 on_status=self._on_deepgram_status,
@@ -652,9 +638,7 @@ async def serve(
             embeddings_path=embeddings_path,
             lance_path=lance_path,
         )
-        print(
-            "[pneuma-sidecar] Semantic engine configured (lazy load).", file=sys.stderr
-        )
+        print("[pneuma-sidecar] Semantic engine configured (lazy load).", file=sys.stderr)
     else:
         print(
             "[pneuma-sidecar] Semantic engine disabled (no paths provided).",

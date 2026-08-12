@@ -159,17 +159,11 @@ class SemanticEngine:
             return
 
         if not os.path.exists(self.embeddings_path):
-            raise FileNotFoundError(
-                f"Embeddings parquet not found: {self.embeddings_path}"
-            )
+            raise FileNotFoundError(f"Embeddings parquet not found: {self.embeddings_path}")
 
-        print(
-            "[pneuma-sidecar] Loading verse embeddings into LanceDB...", file=sys.stderr
-        )
+        print("[pneuma-sidecar] Loading verse embeddings into LanceDB...", file=sys.stderr)
         table_arrow = pq.read_table(self.embeddings_path)
-        self._table = self._db.create_table(
-            "bible_verses", data=table_arrow, mode="overwrite"
-        )
+        self._table = self._db.create_table("bible_verses", data=table_arrow, mode="overwrite")
         self._indexed = True
         print(
             f"[pneuma-sidecar] LanceDB indexed ({self._table.count_rows()} verses).",
