@@ -1,0 +1,7 @@
+dist/
+node_modules/
+src-tauri/target/
+sidecar/.venv/
+sidecar/build/
+sidecar/dist/
+package-lock.json

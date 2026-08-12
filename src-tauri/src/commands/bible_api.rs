@@ -2,8 +2,8 @@ use rusqlite::Connection;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::db;
 use crate::commands::import::BOOK_NAMES;
+use crate::db;
 
 const API_BASE: &str = "https://rest.api.bible/v1";
 
@@ -83,7 +83,9 @@ struct BooksResponse {
 #[serde(rename_all = "camelCase")]
 struct BookInfo {
     id: String,
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     name_long: Option<String>,
 }
 
@@ -98,6 +100,7 @@ struct ChapterInfo {
     id: String,
     number: String,
     #[serde(default)]
+    #[allow(dead_code)]
     book_id: Option<String>,
 }
 
@@ -118,27 +121,30 @@ struct VerseInfo {
     #[serde(default)]
     org_id: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     book_id: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     chapter_id: Option<String>,
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     reference: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     verse_count: Option<i64>,
 }
 
 // USFM book code → 1-based book index (66 books)
 fn usfm_to_index(usfm: &str) -> Option<i64> {
     let codes = [
-        "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA",
-        "1KI", "2KI", "1CH", "2CH", "EZR", "NEH", "EST", "JOB", "PSA", "PRO",
-        "ECC", "SNG", "ISA", "JER", "LAM", "EZK", "DAN", "HOS", "JOL", "AMO",
-        "OBA", "JON", "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
-        "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH",
-        "PHP", "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM",
-        "HEB", "JAS", "1PE", "2PE", "1JN", "2JN", "3JN", "JUD", "REV",
+        "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA", "1KI", "2KI", "1CH",
+        "2CH", "EZR", "NEH", "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER", "LAM", "EZK",
+        "DAN", "HOS", "JOL", "AMO", "OBA", "JON", "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
+        "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH", "PHP", "COL", "1TH",
+        "2TH", "1TI", "2TI", "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN", "3JN", "JUD",
+        "REV",
     ];
     for (i, code) in codes.iter().enumerate() {
         if *code == usfm {
@@ -226,12 +232,16 @@ pub async fn download_bible(
         // 2. Fetch chapters for this book
         let chapters: Vec<ChapterInfo> = {
             let resp = client
-                .get(format!("{}/bibles/{}/books/{}/chapters", API_BASE, bible_id, book.id))
+                .get(format!(
+                    "{}/bibles/{}/books/{}/chapters",
+                    API_BASE, bible_id, book.id
+                ))
                 .header("api-key", api_key())
                 .send()
                 .await
                 .map_err(|e| format!("Failed to fetch chapters for {}: {}", book.id, e))?;
-            let cr: ChaptersResponse = parse_api_bible_response(resp, &format!("chapters for {}", book.id)).await?;
+            let cr: ChaptersResponse =
+                parse_api_bible_response(resp, &format!("chapters for {}", book.id)).await?;
             cr.data
         };
 
@@ -249,7 +259,8 @@ pub async fn download_bible(
                 .await
                 .map_err(|e| format!("Failed to fetch verses for {}: {}", chapter.id, e))?;
 
-            let vr: VersesResponse = parse_api_bible_response(resp, &format!("verses for {}", chapter.id)).await?;
+            let vr: VersesResponse =
+                parse_api_bible_response(resp, &format!("verses for {}", chapter.id)).await?;
 
             for verse in &vr.data {
                 // Verse org_id format is typically "JHN.3.16"
@@ -265,7 +276,10 @@ pub async fn download_bible(
                 }
 
                 let resp = client
-                    .get(format!("{}/bibles/{}/verses/{}", API_BASE, bible_id, verse.id))
+                    .get(format!(
+                        "{}/bibles/{}/verses/{}",
+                        API_BASE, bible_id, verse.id
+                    ))
                     .header("api-key", api_key())
                     .query(&[
                         ("content-type", "text"),
@@ -278,7 +292,8 @@ pub async fn download_bible(
                     .await
                     .map_err(|e| format!("Failed to fetch verse {}: {}", verse.id, e))?;
 
-                let detail: VerseResponse = parse_api_bible_response(resp, &format!("verse {}", verse.id)).await?;
+                let detail: VerseResponse =
+                    parse_api_bible_response(resp, &format!("verse {}", verse.id)).await?;
                 let Some(content) = detail.data.content.as_deref() else {
                     continue;
                 };
@@ -297,12 +312,15 @@ pub async fn download_bible(
         }
 
         books_completed += 1;
-        let _ = app.emit("bible:download-progress", serde_json::json!({
-            "phase": "downloading",
-            "current": books_completed,
-            "total": total_books,
-            "message": format!("Downloaded {} ({}/{})", book_name, books_completed, total_books)
-        }));
+        let _ = app.emit(
+            "bible:download-progress",
+            serde_json::json!({
+                "phase": "downloading",
+                "current": books_completed,
+                "total": total_books,
+                "message": format!("Downloaded {} ({}/{})", book_name, books_completed, total_books)
+            }),
+        );
     }
 
     // 4. Import into DB
@@ -355,7 +373,9 @@ pub struct DownloadResult {
 
 /// List translations already installed in the local DB, joined with metadata for full names.
 #[tauri::command]
-pub async fn get_installed_translations(app: AppHandle) -> Result<Vec<InstalledTranslation>, String> {
+pub async fn get_installed_translations(
+    app: AppHandle,
+) -> Result<Vec<InstalledTranslation>, String> {
     let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
@@ -395,11 +415,12 @@ pub struct InstalledTranslation {
 #[tauri::command]
 pub async fn delete_translation(app: AppHandle, translation_code: String) -> Result<i64, String> {
     let conn = get_conn(&app)?;
-    let deleted = conn.execute(
-        "DELETE FROM local_bible_repository WHERE translation_code = ?1",
-        rusqlite::params![translation_code],
-    )
-    .map_err(|e| format!("Failed to delete verses: {}", e))?;
+    let deleted = conn
+        .execute(
+            "DELETE FROM local_bible_repository WHERE translation_code = ?1",
+            rusqlite::params![translation_code],
+        )
+        .map_err(|e| format!("Failed to delete verses: {}", e))?;
 
     conn.execute(
         "DELETE FROM translation_metadata WHERE code = ?1",

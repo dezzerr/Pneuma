@@ -64,12 +64,7 @@ export interface AudioDevice {
   is_default: boolean;
 }
 
-export type EngineStatus =
-  | "stopped"
-  | "starting"
-  | "running"
-  | "paused"
-  | "error";
+export type EngineStatus = "stopped" | "starting" | "running" | "paused" | "error";
 
 export type EngineMode = "cloud" | "local";
 

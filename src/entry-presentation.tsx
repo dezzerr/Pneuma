@@ -9,5 +9,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ErrorBoundary>
       <PresentationApp />
     </ErrorBoundary>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

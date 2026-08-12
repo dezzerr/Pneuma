@@ -44,7 +44,8 @@ pub async fn db_query_verses(
     verse_start: i64,
     verse_end: i64,
 ) -> Result<Vec<VerseResult>, String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
@@ -62,7 +63,13 @@ pub async fn db_query_verses(
 
     let verses = stmt
         .query_map(
-            rusqlite::params![translation_code, book_index, chapter, verse_start, verse_end],
+            rusqlite::params![
+                translation_code,
+                book_index,
+                chapter,
+                verse_start,
+                verse_end
+            ],
             |row| {
                 Ok(VerseResult {
                     id: row.get(0)?,
@@ -85,14 +92,16 @@ pub async fn db_query_verses(
 
 #[tauri::command]
 pub async fn db_get_translations(app: AppHandle) -> Result<Vec<TranslationInfo>, String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
         .lock()
         .map_err(|e| format!("DB lock error: {}", e))?;
 
-    let mut stmt = conn.0
+    let mut stmt = conn
+        .0
         .prepare("SELECT code, name, is_default FROM translation_metadata ORDER BY is_default DESC")
         .map_err(|e| format!("Query prepare error: {}", e))?;
 
@@ -113,32 +122,36 @@ pub async fn db_get_translations(app: AppHandle) -> Result<Vec<TranslationInfo>,
 
 #[tauri::command]
 pub async fn db_save_settings(app: AppHandle, settings: String) -> Result<(), String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
         .lock()
         .map_err(|e| format!("DB lock error: {}", e))?;
 
-    conn.0.execute(
-        "INSERT OR REPLACE INTO app_settings (id, settings_json) VALUES (1, ?1)",
-        rusqlite::params![settings],
-    )
-    .map_err(|e| format!("Save settings error: {}", e))?;
+    conn.0
+        .execute(
+            "INSERT OR REPLACE INTO app_settings (id, settings_json) VALUES (1, ?1)",
+            rusqlite::params![settings],
+        )
+        .map_err(|e| format!("Save settings error: {}", e))?;
 
     Ok(())
 }
 
 #[tauri::command]
 pub async fn db_load_settings(app: AppHandle) -> Result<Option<String>, String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
         .lock()
         .map_err(|e| format!("DB lock error: {}", e))?;
 
-    let result: Result<Option<String>, rusqlite::Error> = conn.0
+    let result: Result<Option<String>, rusqlite::Error> = conn
+        .0
         .query_row(
             "SELECT settings_json FROM app_settings WHERE id = 1",
             [],
@@ -162,7 +175,8 @@ pub async fn db_search_by_reference(
     verse_start: i64,
     verse_end: i64,
 ) -> Result<Vec<VerseResult>, String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
@@ -170,7 +184,8 @@ pub async fn db_search_by_reference(
         .map_err(|e| format!("DB lock error: {}", e))?;
 
     // Resolve book_name to book_index (case-insensitive, partial match)
-    let book_index: i64 = conn.0
+    let book_index: i64 = conn
+        .0
         .query_row(
             "SELECT book_index FROM local_bible_repository
              WHERE translation_code = ?1 AND book_name LIKE ?2
@@ -191,7 +206,13 @@ pub async fn db_search_by_reference(
 
     let verses = stmt
         .query_map(
-            rusqlite::params![translation_code, book_index, chapter, verse_start, verse_end],
+            rusqlite::params![
+                translation_code,
+                book_index,
+                chapter,
+                verse_start,
+                verse_end
+            ],
             |row| {
                 Ok(VerseResult {
                     id: row.get(0)?,
@@ -219,7 +240,8 @@ pub async fn db_search_text(
     query: String,
     limit: i64,
 ) -> Result<Vec<VerseResult>, String> {
-    let conn_state = app.try_state::<Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     let conn = conn_state
         .inner()
@@ -238,21 +260,18 @@ pub async fn db_search_text(
 
     let pattern = format!("%{}%", query);
     let verses = stmt
-        .query_map(
-            rusqlite::params![translation_code, pattern, limit],
-            |row| {
-                Ok(VerseResult {
-                    id: row.get(0)?,
-                    translation_code: row.get(1)?,
-                    book_index: row.get(2)?,
-                    book_name: row.get(3)?,
-                    chapter_number: row.get(4)?,
-                    verse_number: row.get(5)?,
-                    verse_text: row.get(6)?,
-                    clean_search_tokens: row.get(7)?,
-                })
-            },
-        )
+        .query_map(rusqlite::params![translation_code, pattern, limit], |row| {
+            Ok(VerseResult {
+                id: row.get(0)?,
+                translation_code: row.get(1)?,
+                book_index: row.get(2)?,
+                book_name: row.get(3)?,
+                chapter_number: row.get(4)?,
+                verse_number: row.get(5)?,
+                verse_text: row.get(6)?,
+                clean_search_tokens: row.get(7)?,
+            })
+        })
         .map_err(|e| format!("Query error: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row mapping error: {}", e))?;

@@ -17,7 +17,8 @@ import type {
   SaaSAccountState,
 } from "@/shared/types";
 
-export type DrawerTab = "ndi" | "import" | "canvas" | "settings" | "marketplace" | "billing" | null;
+/** Panels available in the local-first private beta. */
+export type DrawerTab = "import" | "canvas" | "settings" | null;
 
 interface OperatorState {
   // Audio monitor
@@ -52,6 +53,12 @@ interface OperatorState {
   // Staging (Preview Canvas)
   stagedItem: VerseQueueItem | null;
   liveSync: boolean;
+
+  // Internal timers used to protect the live output from rapid changes.
+  _lastGoLiveTs: number;
+  _pendingGoLive: VerseQueueItem | null;
+  _cooldownTimer: ReturnType<typeof setTimeout> | null;
+  _themeSaveTimer: ReturnType<typeof setTimeout> | null;
 
   // Live Output Monitor (mirror of what's on screen)
   liveItem: VerseQueueItem | null;
@@ -171,6 +178,37 @@ const DEFAULT_SAAS_STATE: SaaSState = {
   },
 };
 
+const MAX_TRANSCRIPT_CHUNKS = 100;
+
+/** Keep one evolving interim line instead of appending the whole utterance repeatedly. */
+function mergeTranscriptChunk(
+  chunks: TranscriptChunk[],
+  chunk: TranscriptChunk,
+): TranscriptChunk[] {
+  const next = [...chunks];
+  const last = next[next.length - 1];
+  if (chunk.is_final && chunk.detected_scriptures.length > 0) {
+    // Semantic detection can arrive after the final text so expensive first-
+    // use indexing never delays the transcript. Merge that follow-up in place.
+    let existingIndex = -1;
+    for (let i = next.length - 1; i >= Math.max(0, next.length - 10); i--) {
+      if (
+        next[i].is_final &&
+        next[i].raw_text === chunk.raw_text &&
+        next[i].detected_scriptures.length === 0
+      ) {
+        existingIndex = i;
+        break;
+      }
+    }
+    if (existingIndex >= 0) next[existingIndex] = chunk;
+    else if (last && !last.is_final) next[next.length - 1] = chunk;
+    else next.push(chunk);
+  } else if (last && !last.is_final) next[next.length - 1] = chunk;
+  else next.push(chunk);
+  return next.slice(-MAX_TRANSCRIPT_CHUNKS);
+}
+
 export const useOperatorStore = create<OperatorState>((set) => ({
   audioDevices: [],
   selectedDeviceId: null,
@@ -194,6 +232,10 @@ export const useOperatorStore = create<OperatorState>((set) => ({
 
   stagedItem: null,
   liveSync: false,
+  _lastGoLiveTs: 0,
+  _pendingGoLive: null,
+  _cooldownTimer: null,
+  _themeSaveTimer: null,
   liveItem: null,
 
   playlist: [],
@@ -207,8 +249,8 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     theme: DEFAULT_THEME,
     selected_audio_device: null,
     model_tier: "base",
-    inference_delay_ms: 750,
-    semantic_threshold: 0.70,
+    inference_delay_ms: 300,
+    semantic_threshold: 0.7,
     hot_words: [],
     active_translation: "KJV",
   },
@@ -238,8 +280,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
       sessionRunning: true,
       sessionElapsedMs: state.engineStatus === "paused" ? state.sessionElapsedMs : 0,
     })),
-  pauseSession: () =>
-    set({ engineStatus: "paused", sessionRunning: false }),
+  pauseSession: () => set({ engineStatus: "paused", sessionRunning: false }),
   stopSession: () =>
     set({
       engineStatus: "stopped",
@@ -256,7 +297,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
 
   addTranscriptChunk: (chunk) =>
     set((state) => ({
-      transcriptChunks: [...state.transcriptChunks.slice(-99), chunk],
+      transcriptChunks: mergeTranscriptChunk(state.transcriptChunks, chunk),
     })),
 
   // Adds a transcript chunk and spawns pending verse-queue items for any
@@ -279,7 +320,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     const stageTarget = exactMatch ?? null;
 
     set((state) => ({
-      transcriptChunks: [...state.transcriptChunks.slice(-99), chunk],
+      transcriptChunks: mergeTranscriptChunk(state.transcriptChunks, chunk),
       verseQueue: [...newItems, ...state.verseQueue],
       recentDetections: [...newItems, ...state.recentDetections].slice(0, 50),
       stagedItem: stageTarget ?? state.stagedItem,
@@ -314,28 +355,23 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     }
   },
 
-  addVerseToQueue: (item) =>
-    set((state) => ({ verseQueue: [item, ...state.verseQueue] })),
+  addVerseToQueue: (item) => set((state) => ({ verseQueue: [item, ...state.verseQueue] })),
 
   updateVerseText: (id, verseText) =>
     set((state) => ({
-      verseQueue: state.verseQueue.map((v) =>
-        v.id === id ? { ...v, verse_text: verseText } : v
-      ),
+      verseQueue: state.verseQueue.map((v) => (v.id === id ? { ...v, verse_text: verseText } : v)),
     })),
 
   updateVerseData: (id, verseText, verses) =>
     set((state) => ({
       verseQueue: state.verseQueue.map((v) =>
-        v.id === id ? { ...v, verse_text: verseText, verses } : v
+        v.id === id ? { ...v, verse_text: verseText, verses } : v,
       ),
     })),
 
   updateVerseStatus: (id, status) =>
     set((state) => {
-      const queue = state.verseQueue.map((v) =>
-        v.id === id ? { ...v, status } : v
-      );
+      const queue = state.verseQueue.map((v) => (v.id === id ? { ...v, status } : v));
       const item = queue.find((v) => v.id === id);
       let history = state.verseHistory;
       if (item && (status === "live" || status === "dismissed")) {
@@ -365,14 +401,14 @@ export const useOperatorStore = create<OperatorState>((set) => ({
 
     // If something is already live and hasn't been shown for the minimum duration,
     // queue the new item and emit it after the cooldown.
-    if (state.liveItem && now - (state as any)._lastGoLiveTs < MIN_DISPLAY_MS) {
+    if (state.liveItem && now - state._lastGoLiveTs < MIN_DISPLAY_MS) {
       // Store pending item; a timer will emit it after cooldown
-      set({ _pendingGoLive: item } as any);
-      if (!(state as any)._cooldownTimer) {
-        const remaining = MIN_DISPLAY_MS - (now - (state as any)._lastGoLiveTs);
-        setTimeout(() => {
+      set({ _pendingGoLive: item });
+      if (!state._cooldownTimer) {
+        const remaining = MIN_DISPLAY_MS - (now - state._lastGoLiveTs);
+        const cooldownTimer = setTimeout(() => {
           const s = useOperatorStore.getState();
-          const pending = (s as any)._pendingGoLive;
+          const pending = s._pendingGoLive;
           if (pending) {
             set({
               liveItem: pending,
@@ -380,7 +416,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
               _lastGoLiveTs: Date.now(),
               _pendingGoLive: null,
               _cooldownTimer: null,
-            } as any);
+            });
             import("@tauri-apps/api/event").then(({ emit }) => {
               emit(EVENTS.VERSE_GO_LIVE, pending);
             });
@@ -389,13 +425,19 @@ export const useOperatorStore = create<OperatorState>((set) => ({
             }
           }
         }, remaining);
-        set({ _cooldownTimer: true } as any);
+        set({ _cooldownTimer: cooldownTimer });
       }
       return;
     }
 
     // No cooldown needed — emit immediately
-    set({ liveItem: item, livePage: 0, _lastGoLiveTs: now, _pendingGoLive: null, _cooldownTimer: null } as any);
+    set({
+      liveItem: item,
+      livePage: 0,
+      _lastGoLiveTs: now,
+      _pendingGoLive: null,
+      _cooldownTimer: null,
+    });
     import("@tauri-apps/api/event").then(({ emit }) => {
       emit(EVENTS.VERSE_GO_LIVE, item);
     });
@@ -406,11 +448,9 @@ export const useOperatorStore = create<OperatorState>((set) => ({
 
   clearLive: () => set({ liveItem: null, livePage: 0 }),
 
-  toggleLiveSync: () =>
-    set((state) => ({ liveSync: !state.liveSync })),
+  toggleLiveSync: () => set((state) => ({ liveSync: !state.liveSync })),
 
-  addToPlaylist: (item) =>
-    set((state) => ({ playlist: [...state.playlist, item] })),
+  addToPlaylist: (item) => set((state) => ({ playlist: [...state.playlist, item] })),
 
   removeFromPlaylist: (id) =>
     set((state) => ({
@@ -454,14 +494,13 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     set((state) => {
       const newTheme = { ...state.theme, ...partial };
       // Debounce-save settings
-      clearTimeout((state as any)._themeSaveTimer);
-      (state as any)._themeSaveTimer = setTimeout(() => {
+      if (state._themeSaveTimer) clearTimeout(state._themeSaveTimer);
+      const themeSaveTimer = setTimeout(() => {
         useOperatorStore.getState().saveSettings();
       }, 500);
-      return { theme: newTheme };
+      return { theme: newTheme, _themeSaveTimer: themeSaveTimer };
     }),
-  toggleThemePanel: () =>
-    set((state) => ({ themePanelOpen: !state.themePanelOpen })),
+  toggleThemePanel: () => set((state) => ({ themePanelOpen: !state.themePanelOpen })),
   setDrawerTab: (tab) => set({ drawerTab: tab }),
   clearTranscript: () => set({ transcriptChunks: [] }),
 
@@ -473,6 +512,9 @@ export const useOperatorStore = create<OperatorState>((set) => ({
         return;
       }
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
+      // 750ms was the private-beta hardcoded value and was never user-facing.
+      // Migrate it to the lower-latency default while preserving other values.
+      if (parsed.inference_delay_ms === 750) parsed.inference_delay_ms = 300;
       set((state) => ({
         appSettings: { ...state.appSettings, ...parsed },
         settingsLoaded: true,
@@ -496,8 +538,8 @@ export const useOperatorStore = create<OperatorState>((set) => ({
       theme: state.theme,
       selected_audio_device: state.selectedDeviceId,
     };
-    invoke("db_save_settings", { settings: JSON.stringify(settings) }).catch(
-      (err) => console.error("[pneuma] Failed to save settings:", err)
+    invoke("db_save_settings", { settings: JSON.stringify(settings) }).catch((err) =>
+      console.error("[pneuma] Failed to save settings:", err),
     );
   },
 
@@ -614,8 +656,7 @@ export const useOperatorStore = create<OperatorState>((set) => ({
     }
   },
 
-  toggleHelpOverlay: () =>
-    set((state) => ({ helpOverlayOpen: !state.helpOverlayOpen })),
+  toggleHelpOverlay: () => set((state) => ({ helpOverlayOpen: !state.helpOverlayOpen })),
   toggleSearchMode: () =>
     set((state) => ({
       searchMode: state.searchMode === "reference" ? "semantic" : "reference",

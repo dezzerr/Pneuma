@@ -16,7 +16,7 @@ import asyncio
 import json
 import sys
 import time
-from typing import Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
 
 import numpy as np
 
@@ -29,23 +29,71 @@ except ImportError as exc:  # pragma: no cover
 DEEPGRAM_URL = "wss://api.deepgram.com/v1/listen"
 
 IDLE_TIMEOUT_S = 600  # 10 minutes
-DROP_WARN_S = 45      # 45 seconds
+DROP_WARN_S = 45  # 45 seconds
 SPEECH_RMS_THRESHOLD = 0.015
 GUARD_INTERVAL_S = 5
 
 # Keywords to bias Deepgram toward Bible book names and scripture vocabulary.
 _BIBLE_KEYWORDS = [
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
-    "Joshua", "Judges", "Ruth", "Samuel", "Kings", "Chronicles",
-    "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
-    "Ecclesiastes", "Solomon", "Isaiah", "Jeremiah", "Lamentations",
-    "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", "Obadiah",
-    "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai",
-    "Zechariah", "Malachi", "Matthew", "Mark", "Luke", "John",
-    "Acts", "Romans", "Corinthians", "Galatians", "Ephesians",
-    "Philippians", "Colossians", "Thessalonians", "Timothy",
-    "Titus", "Philemon", "Hebrews", "James", "Peter", "Jude",
-    "Revelation", "chapter", "verse", "verses",
+    "Genesis",
+    "Exodus",
+    "Leviticus",
+    "Numbers",
+    "Deuteronomy",
+    "Joshua",
+    "Judges",
+    "Ruth",
+    "Samuel",
+    "Kings",
+    "Chronicles",
+    "Ezra",
+    "Nehemiah",
+    "Esther",
+    "Job",
+    "Psalms",
+    "Proverbs",
+    "Ecclesiastes",
+    "Solomon",
+    "Isaiah",
+    "Jeremiah",
+    "Lamentations",
+    "Ezekiel",
+    "Daniel",
+    "Hosea",
+    "Joel",
+    "Amos",
+    "Obadiah",
+    "Jonah",
+    "Micah",
+    "Nahum",
+    "Habakkuk",
+    "Zephaniah",
+    "Haggai",
+    "Zechariah",
+    "Malachi",
+    "Matthew",
+    "Mark",
+    "Luke",
+    "John",
+    "Acts",
+    "Romans",
+    "Corinthians",
+    "Galatians",
+    "Ephesians",
+    "Philippians",
+    "Colossians",
+    "Thessalonians",
+    "Timothy",
+    "Titus",
+    "Philemon",
+    "Hebrews",
+    "James",
+    "Peter",
+    "Jude",
+    "Revelation",
+    "chapter",
+    "verse",
+    "verses",
 ]
 
 
@@ -64,8 +112,9 @@ def _build_url(model: str) -> str:
         url += f"&keyword={kw}"
     return url
 
+
 TranscriptCallback = Callable[[str, float, bool], Awaitable[None]]
-StatusCallback = Callable[[str, Optional[str]], None]
+StatusCallback = Callable[[str, str | None], None]
 
 
 class DeepgramEngine:
@@ -75,10 +124,10 @@ class DeepgramEngine:
         self.api_key = api_key
         self.model = model
         self._ws = None
-        self._on_transcript: Optional[TranscriptCallback] = None
-        self._on_status: Optional[StatusCallback] = None
-        self._listen_task: Optional[asyncio.Task] = None
-        self._guard_task: Optional[asyncio.Task] = None
+        self._on_transcript: TranscriptCallback | None = None
+        self._on_status: StatusCallback | None = None
+        self._listen_task: asyncio.Task | None = None
+        self._guard_task: asyncio.Task | None = None
         self._connected = False
 
         self._last_speech_ts: float = time.monotonic()
@@ -107,9 +156,7 @@ class DeepgramEngine:
         url = _build_url(self.model)
 
         try:
-            self._ws = await websockets.connect(
-                url, additional_headers=headers, max_size=None
-            )
+            self._ws = await websockets.connect(url, additional_headers=headers, max_size=None)
         except Exception as exc:
             self._on_status("error", f"Deepgram connect failed: {exc}")
             raise
@@ -138,7 +185,10 @@ class DeepgramEngine:
         # If idle_paused, check for speech to trigger auto-resume
         if self._idle_paused:
             if self._has_speech and (time.monotonic() - self._last_speech_ts) < 1.0:
-                print("[pneuma-sidecar] Speech detected after idle, resuming Deepgram...", file=sys.stderr)
+                print(
+                    "[pneuma-sidecar] Speech detected after idle, resuming Deepgram...",
+                    file=sys.stderr,
+                )
                 await self._resume()
             return
 
@@ -245,9 +295,7 @@ class DeepgramEngine:
         url = _build_url(self.model)
 
         try:
-            self._ws = await websockets.connect(
-                url, additional_headers=headers, max_size=None
-            )
+            self._ws = await websockets.connect(url, additional_headers=headers, max_size=None)
             self._idle_paused = False
             self._last_token_ts = time.monotonic()
             self._drop_warned = False

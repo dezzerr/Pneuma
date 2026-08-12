@@ -2,7 +2,6 @@ use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 use crate::db;
@@ -75,7 +74,8 @@ pub struct SaasState {
 }
 
 fn lock_conn(app: &AppHandle) -> Result<std::sync::MutexGuard<'_, db::DbState>, String> {
-    let conn_state = app.try_state::<std::sync::Mutex<db::DbState>>()
+    let conn_state = app
+        .try_state::<std::sync::Mutex<db::DbState>>()
         .ok_or_else(|| "Database not ready".to_string())?;
     conn_state
         .inner()
@@ -112,10 +112,14 @@ fn local_midnight(tz: Tz, date: NaiveDate) -> Result<DateTime<Tz>, String> {
         .ok_or_else(|| "Unable to resolve organization timezone".to_string())
 }
 
-fn current_week_bounds(now_utc: DateTime<Utc>, timezone: &str) -> Result<(DateTime<Tz>, DateTime<Tz>), String> {
+fn current_week_bounds(
+    now_utc: DateTime<Utc>,
+    timezone: &str,
+) -> Result<(DateTime<Tz>, DateTime<Tz>), String> {
     let tz = resolve_timezone(timezone);
     let now_local = now_utc.with_timezone(&tz);
-    let start_date = now_local.date_naive() - Duration::days(now_local.weekday().num_days_from_sunday() as i64);
+    let start_date =
+        now_local.date_naive() - Duration::days(now_local.weekday().num_days_from_sunday() as i64);
     let start_local = local_midnight(tz, start_date)?;
     let end_local = start_local + Duration::days(7);
     Ok((start_local, end_local))
@@ -163,7 +167,10 @@ fn usage_window_strings(timezone: &str) -> Result<(String, String), String> {
     Ok((start.to_rfc3339(), end.to_rfc3339()))
 }
 
-fn compute_usage(conn: &Connection, account: &SaasAccountState) -> Result<CloudUsageSummary, String> {
+fn compute_usage(
+    conn: &Connection,
+    account: &SaasAccountState,
+) -> Result<CloudUsageSummary, String> {
     let timezone = normalize_timezone(&account.organization_timezone);
     let (week_start, week_end) = usage_window_strings(&timezone)?;
     let now_ms = Utc::now().timestamp_millis();
@@ -185,7 +192,8 @@ fn compute_usage(conn: &Connection, account: &SaasAccountState) -> Result<CloudU
     let mut active_session = false;
 
     for row in rows {
-        let (started_at_ms, ended_at_ms) = row.map_err(|e| format!("Cloud usage row error: {}", e))?;
+        let (started_at_ms, ended_at_ms) =
+            row.map_err(|e| format!("Cloud usage row error: {}", e))?;
         let end_ms = ended_at_ms.unwrap_or(now_ms);
         if ended_at_ms.is_none() {
             active_session = true;
@@ -201,10 +209,15 @@ fn compute_usage(conn: &Connection, account: &SaasAccountState) -> Result<CloudU
     let used_seconds = (used_ms / 1000).max(0);
     let unlimited = account.signed_in
         && account.plan == "standard"
-        && (account.subscription_status == "active" || account.subscription_status == "grace_period");
+        && (account.subscription_status == "active"
+            || account.subscription_status == "grace_period");
 
     let (cloud_allowed, blocking_reason, remaining_seconds) = if !account.signed_in {
-        (false, Some("Sign in to use managed cloud transcription.".to_string()), 0)
+        (
+            false,
+            Some("Sign in to use managed cloud transcription.".to_string()),
+            0,
+        )
     } else if unlimited {
         (true, None, 0)
     } else if account.plan == "free" {
@@ -214,14 +227,19 @@ fn compute_usage(conn: &Connection, account: &SaasAccountState) -> Result<CloudU
         } else {
             (
                 false,
-                Some("Your free 40-minute cloud allowance has been used for this week.".to_string()),
+                Some(
+                    "Your free 40-minute cloud allowance has been used for this week.".to_string(),
+                ),
                 0,
             )
         }
     } else {
         (
             false,
-            Some("An active Standard subscription is required for unlimited cloud transcription.".to_string()),
+            Some(
+                "An active Standard subscription is required for unlimited cloud transcription."
+                    .to_string(),
+            ),
             0,
         )
     };
@@ -264,12 +282,17 @@ pub async fn saas_is_dev_mode() -> bool {
 
 /// Retrieve recent audit log entries (dev/diagnostic only).
 #[tauri::command]
-pub async fn saas_get_audit_log(app: AppHandle, limit: Option<i64>) -> Result<Vec<AuditEntry>, String> {
+pub async fn saas_get_audit_log(
+    app: AppHandle,
+    limit: Option<i64>,
+) -> Result<Vec<AuditEntry>, String> {
     let conn = lock_conn(&app)?;
     let lim = limit.unwrap_or(50).min(500);
     let mut stmt = conn
         .0
-        .prepare("SELECT id, event_type, detail, timestamp FROM audit_log ORDER BY id DESC LIMIT ?1")
+        .prepare(
+            "SELECT id, event_type, detail, timestamp FROM audit_log ORDER BY id DESC LIMIT ?1",
+        )
         .map_err(|e| format!("Prepare audit log error: {}", e))?;
     let entries = stmt
         .query_map(params![lim], |row| {
@@ -295,7 +318,10 @@ pub async fn saas_get_state(app: AppHandle) -> Result<SaasState, String> {
 }
 
 #[tauri::command]
-pub async fn saas_save_account(app: AppHandle, account: SaasAccountState) -> Result<SaasState, String> {
+pub async fn saas_save_account(
+    app: AppHandle,
+    account: SaasAccountState,
+) -> Result<SaasState, String> {
     let conn = lock_conn(&app)?;
     let old_account = load_account(&conn.0)?;
     let saved = save_account(&conn.0, &account)?;
@@ -303,7 +329,10 @@ pub async fn saas_save_account(app: AppHandle, account: SaasAccountState) -> Res
         write_audit_log(
             &conn.0,
             "plan_changed",
-            Some(&format!("{} -> {} (status: {})", old_account.plan, saved.plan, saved.subscription_status)),
+            Some(&format!(
+                "{} -> {} (status: {})",
+                old_account.plan, saved.plan, saved.subscription_status
+            )),
         );
     }
     if !old_account.signed_in && saved.signed_in {
@@ -322,11 +351,9 @@ pub async fn saas_start_cloud_session(app: AppHandle) -> Result<SaasState, Strin
     let usage = compute_usage(&conn.0, &account)?;
 
     if !usage.cloud_allowed {
-        return Err(
-            usage
-                .blocking_reason
-                .unwrap_or_else(|| "Cloud transcription is not available.".to_string()),
-        );
+        return Err(usage
+            .blocking_reason
+            .unwrap_or_else(|| "Cloud transcription is not available.".to_string()));
     }
 
     let active_id: Option<i64> = conn
@@ -400,7 +427,12 @@ pub async fn saas_open_checkout(app: AppHandle) -> Result<(), String> {
     let mut url = base;
     if !account.email.is_empty() {
         let sep = if url.contains('?') { '&' } else { '?' };
-        url = format!("{}{}prefilled_email={}", url, sep, urlencoding::encode(&account.email));
+        url = format!(
+            "{}{}prefilled_email={}",
+            url,
+            sep,
+            urlencoding::encode(&account.email)
+        );
     }
 
     open::that(&url).map_err(|e| format!("Failed to open checkout: {}", e))
@@ -422,4 +454,69 @@ pub async fn saas_open_billing_portal() -> Result<(), String> {
 pub async fn saas_refresh_entitlements(app: AppHandle) -> Result<SaasState, String> {
     let conn = lock_conn(&app)?;
     build_state(&conn.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Timelike;
+
+    #[test]
+    fn test_normalize_timezone_valid() {
+        assert_eq!(normalize_timezone("America/New_York"), "America/New_York");
+        assert_eq!(normalize_timezone("UTC"), "UTC");
+        assert_eq!(normalize_timezone("Europe/London"), "Europe/London");
+    }
+
+    #[test]
+    fn test_normalize_timezone_empty() {
+        assert_eq!(normalize_timezone(""), "UTC");
+        assert_eq!(normalize_timezone("   "), "UTC");
+    }
+
+    #[test]
+    fn test_normalize_timezone_invalid() {
+        assert_eq!(normalize_timezone("Foo/Bar"), "UTC");
+        assert_eq!(normalize_timezone("NotATimezone"), "UTC");
+    }
+
+    #[test]
+    fn test_saas_account_default() {
+        let account = SaasAccountState::default();
+        assert!(!account.signed_in);
+        assert_eq!(account.plan, "free");
+        assert_eq!(account.subscription_status, "inactive");
+        assert_eq!(account.organization_timezone, "UTC");
+        assert!(account.last_synced_at.is_none());
+    }
+
+    #[test]
+    fn test_current_week_bounds_sunday_start() {
+        // 2025-01-15 is a Wednesday — week should start on Sunday Jan 12
+        let now = Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
+        let (start, end) = current_week_bounds(now, "UTC").unwrap();
+        assert_eq!(start.day(), 12);
+        assert_eq!(end.day(), 19);
+        assert_eq!(start.hour(), 0);
+        assert_eq!(end.hour(), 0);
+    }
+
+    #[test]
+    fn test_current_week_bounds_with_timezone() {
+        // 2025-01-15 12:00 UTC = 07:00 America/New_York (EST)
+        let now = Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
+        let (start, end) = current_week_bounds(now, "America/New_York").unwrap();
+        // Week starts at midnight local time (EST = UTC-5)
+        assert_eq!(start.day(), 12);
+        assert_eq!(end.day(), 19);
+    }
+
+    #[test]
+    fn test_current_week_bounds_sunday() {
+        // 2025-01-12 is a Sunday — week should start on the same day
+        let now = Utc.with_ymd_and_hms(2025, 1, 12, 6, 0, 0).unwrap();
+        let (start, end) = current_week_bounds(now, "UTC").unwrap();
+        assert_eq!(start.day(), 12);
+        assert_eq!(end.day(), 19);
+    }
 }

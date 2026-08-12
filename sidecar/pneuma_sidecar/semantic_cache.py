@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 import time
 from collections import OrderedDict
-from typing import Optional
 
 
 def _normalise(text: str) -> str:
@@ -30,7 +29,7 @@ class SemanticCache:
         self.hits = 0
         self.misses = 0
 
-    def get(self, query: str) -> Optional[list[dict]]:
+    def get(self, query: str) -> list[dict] | None:
         key = _normalise(query)
         if not key:
             return None

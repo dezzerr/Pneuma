@@ -39,7 +39,6 @@ export const usePresentationStore = create<PresentationState>((set) => ({
   setPage: (page) => set({ currentPage: page }),
   setCanvasState: (canvasState) => set({ canvasState }),
   setTheme: (theme) => set({ theme }),
-  freeze: () =>
-    set((state) => ({ frozenVerse: state.currentVerse, canvasState: "freeze" })),
+  freeze: () => set((state) => ({ frozenVerse: state.currentVerse, canvasState: "freeze" })),
   resume: () => set({ frozenVerse: null, canvasState: "normal" }),
 }));

@@ -42,11 +42,15 @@ export function BillingPanel() {
   const [isDevMode, setIsDevMode] = useState(false);
 
   useEffect(() => {
-    invoke<boolean>("saas_is_dev_mode").then(setIsDevMode).catch(() => setIsDevMode(false));
+    invoke<boolean>("saas_is_dev_mode")
+      .then(setIsDevMode)
+      .catch(() => setIsDevMode(false));
   }, []);
 
   const { account, usage } = saasState;
-  const isStandard = account.plan === "standard" && (account.subscription_status === "active" || account.subscription_status === "grace_period");
+  const isStandard =
+    account.plan === "standard" &&
+    (account.subscription_status === "active" || account.subscription_status === "grace_period");
   const isGracePeriod = account.subscription_status === "grace_period";
 
   const handleUpgrade = async () => {
@@ -100,16 +104,16 @@ export function BillingPanel() {
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Current Plan</p>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Current Plan
+              </p>
               <p className="text-sm font-semibold text-foreground">
                 {isStandard ? "Standard" : "Free"}
               </p>
             </div>
             <span
               className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
-                isStandard
-                  ? "bg-green-500/10 text-green-500"
-                  : "bg-secondary text-muted-foreground"
+                isStandard ? "bg-green-500/10 text-green-500" : "bg-secondary text-muted-foreground"
               }`}
             >
               {account.subscription_status === "active" && "Active"}
@@ -131,14 +135,19 @@ export function BillingPanel() {
             <div>
               <p className="text-xs font-medium text-warning">Payment Action Required</p>
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Your subscription is in a grace period. Update your payment method to avoid losing unlimited cloud access.
+                Your subscription is in a grace period. Update your payment method to avoid losing
+                unlimited cloud access.
               </p>
               <button
                 onClick={handleManageBilling}
                 disabled={portalLoading}
                 className="mt-2 flex items-center gap-1 rounded-full border border-warning/40 px-2.5 py-1 text-[10px] font-medium text-warning transition-colors hover:bg-warning/10 disabled:opacity-40"
               >
-                {portalLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
+                {portalLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-3 w-3" />
+                )}
                 Update Payment
               </button>
             </div>
@@ -157,7 +166,9 @@ export function BillingPanel() {
               <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
               <h3 className="text-xs font-semibold text-foreground">Free</h3>
             </div>
-            <p className="mb-2 text-lg font-bold text-foreground">$0<span className="text-[10px] font-normal text-muted-foreground">/mo</span></p>
+            <p className="mb-2 text-lg font-bold text-foreground">
+              $0<span className="text-[10px] font-normal text-muted-foreground">/mo</span>
+            </p>
             <ul className="space-y-1">
               {FREE_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-1 text-[10px] text-muted-foreground">
@@ -181,7 +192,9 @@ export function BillingPanel() {
               <Zap className="h-3.5 w-3.5 text-primary" />
               <h3 className="text-xs font-semibold text-foreground">Standard</h3>
             </div>
-            <p className="mb-2 text-lg font-bold text-foreground">$20<span className="text-[10px] font-normal text-muted-foreground">/mo</span></p>
+            <p className="mb-2 text-lg font-bold text-foreground">
+              $20<span className="text-[10px] font-normal text-muted-foreground">/mo</span>
+            </p>
             <ul className="space-y-1">
               {STANDARD_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-1 text-[10px] text-muted-foreground">
@@ -257,7 +270,9 @@ export function BillingPanel() {
           </div>
           <div className="mt-1 flex items-center justify-between">
             <span>Used this week</span>
-            <span className="font-medium text-foreground">{formatDurationSeconds(usage.used_seconds)}</span>
+            <span className="font-medium text-foreground">
+              {formatDurationSeconds(usage.used_seconds)}
+            </span>
           </div>
         </div>
 
@@ -269,28 +284,33 @@ export function BillingPanel() {
 
         {/* Local plan override (dev only — compiled out of release builds) */}
         {isDevMode && (
-        <details className="rounded-xl border border-border bg-card p-3">
-          <summary className="cursor-pointer text-[10px] font-medium text-muted-foreground">
-            Admin: Override plan locally
-          </summary>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => void saveSaasAccount({ plan: "free", subscription_status: "inactive" })}
-              className="rounded-lg border border-border px-2 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary"
-            >
-              Set Free
-            </button>
-            <button
-              onClick={() => void saveSaasAccount({ plan: "standard", subscription_status: "active" })}
-              className="rounded-lg border border-border px-2 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary"
-            >
-              Set Standard
-            </button>
-          </div>
-          <p className="mt-2 text-[9px] text-muted-foreground">
-            For development only. Production entitlements are set by the backend after Stripe checkout.
-          </p>
-        </details>
+          <details className="rounded-xl border border-border bg-card p-3">
+            <summary className="cursor-pointer text-[10px] font-medium text-muted-foreground">
+              Admin: Override plan locally
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() =>
+                  void saveSaasAccount({ plan: "free", subscription_status: "inactive" })
+                }
+                className="rounded-lg border border-border px-2 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary"
+              >
+                Set Free
+              </button>
+              <button
+                onClick={() =>
+                  void saveSaasAccount({ plan: "standard", subscription_status: "active" })
+                }
+                className="rounded-lg border border-border px-2 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary"
+              >
+                Set Standard
+              </button>
+            </div>
+            <p className="mt-2 text-[9px] text-muted-foreground">
+              For development only. Production entitlements are set by the backend after Stripe
+              checkout.
+            </p>
+          </details>
         )}
       </div>
     </div>

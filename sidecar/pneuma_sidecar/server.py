@@ -24,7 +24,7 @@ In **local mode** a lightweight energy gate detects utterance boundaries;
 Faster-Whisper's built-in Silero `vad_filter` then trims each segment before
 transcription. In **cloud mode** raw PCM is streamed directly to Deepgram
 Nova-3, which handles endpointing and transcription server-side. Scripture
-detection runs on final transcripts via a regex parser with a 750ms
+detection runs on final transcripts via a regex parser with a short
 inference-delay hold so that follow-up corrections can replace a pending
 detection before it is emitted. Cloud guardrails: 10-min idle pause and
 45s connection-drop warning.
@@ -36,15 +36,16 @@ import asyncio
 import json
 import math
 import sys
+import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 
-from pneuma_sidecar.scripture_parser import parse as parse_scriptures
-from pneuma_sidecar.semantic_engine import SemanticEngine
-from pneuma_sidecar.semantic_cache import SemanticCache
 from pneuma_sidecar.deepgram_engine import DeepgramEngine
+from pneuma_sidecar.scripture_parser import parse as parse_scriptures
+from pneuma_sidecar.semantic_cache import SemanticCache
+from pneuma_sidecar.semantic_engine import SemanticEngine
 
 try:
     import websockets
@@ -54,13 +55,16 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 
 # --- Audio / VAD constants -------------------------------------------------
 
-SAMPLE_RATE = 16_000           # Hz, fixed contract with the frontend worklet
-START_RMS = 0.015              # energy above this is treated as speech
-SILENCE_HANGOVER_MS = 700      # trailing silence that ends an utterance
-MIN_UTTERANCE_MS = 350         # ignore blips shorter than this
-PARTIAL_INTERVAL_MS = 900      # emit interim transcripts this often while speaking
-MAX_UTTERANCE_MS = 15_000      # force-finalize runaway segments
-SCRIPTURE_HOLD_MS = 750        # inference-delay hold before emitting detected scriptures
+SAMPLE_RATE = 16_000  # Hz, fixed contract with the frontend worklet
+START_RMS = 0.008  # start threshold; accommodates quieter Windows interfaces
+CONTINUE_RMS = 0.004  # hysteresis avoids splitting low-energy syllables
+SILENCE_HANGOVER_MS = 700  # trailing silence that ends an utterance
+MIN_UTTERANCE_MS = 350  # ignore blips shorter than this
+PARTIAL_INTERVAL_MS = 1_400  # cap repeated whole-utterance inference on slower CPUs
+MAX_PARTIAL_WINDOW_MS = 6_000  # bound the cost of an interim transcription
+MAX_UTTERANCE_MS = 15_000  # force-finalize runaway segments
+SCRIPTURE_HOLD_MS = 300  # brief correction window without making finals feel delayed
+PREROLL_FRAMES = 3  # retain 300ms so the first consonant is not clipped by VAD
 
 
 def _ms_to_samples(ms: float) -> int:
@@ -115,9 +119,15 @@ class TranscriptionEngine:
         "first Corinthians second Thessalonians first Timothy second Peter"
     )
 
-    def __init__(self, model_size: str = "base", compute_type: str = "int8"):
+    def __init__(
+        self,
+        model_size: str = "base",
+        compute_type: str = "int8",
+        cpu_threads: int = 0,
+    ):
         self.model_size = model_size
         self.compute_type = compute_type
+        self.cpu_threads = cpu_threads
         self._model = None
         self._lock = asyncio.Lock()
 
@@ -130,7 +140,10 @@ class TranscriptionEngine:
             file=sys.stderr,
         )
         self._model = WhisperModel(
-            self.model_size, device="cpu", compute_type=self.compute_type
+            self.model_size,
+            device="cpu",
+            compute_type=self.compute_type,
+            cpu_threads=self.cpu_threads,
         )
         print("[pneuma-sidecar] Model ready.", file=sys.stderr)
 
@@ -195,7 +208,7 @@ class Session:
         self,
         ws,
         engine: TranscriptionEngine,
-        semantic: Optional[SemanticEngine] = None,
+        semantic: SemanticEngine | None = None,
         engine_mode: str = "local",
         deepgram_key: str = "",
         deepgram_model: str = "nova-3",
@@ -211,11 +224,18 @@ class Session:
         self._pending_scriptures: list[dict] = []
         self._hold_task: asyncio.Task | None = None
         # Deepgram cloud engine (created lazily if key provided)
-        self._deepgram: Optional[DeepgramEngine] = None
+        self._deepgram: DeepgramEngine | None = None
         self._deepgram_key = deepgram_key
         self._deepgram_model = deepgram_model
         # Semantic search result cache (LRU + TTL)
         self._semantic_cache = SemanticCache()
+        # Audio ingestion must never wait for CPU-heavy Whisper inference. A
+        # single latest-wins partial is allowed in flight; finals are preserved.
+        self._utterance_id = 0
+        self._partial_task: asyncio.Task | None = None
+        self._inference_tasks: set[asyncio.Task] = set()
+        self._preroll: deque[np.ndarray] = deque(maxlen=PREROLL_FRAMES)
+        self._closed = False
 
     async def handle_pcm(self, frame: bytes) -> None:
         if not frame:
@@ -239,9 +259,14 @@ class Session:
             return
 
         rms = float(np.sqrt(np.mean(samples**2)))
-        is_voice = rms >= START_RMS
+        threshold = CONTINUE_RMS if self.utt.is_speaking else START_RMS
+        is_voice = rms >= threshold
 
         if is_voice:
+            if not self.utt.is_speaking:
+                for preroll_chunk in self._preroll:
+                    self.utt.add(preroll_chunk)
+                self._preroll.clear()
             self.utt.is_speaking = True
             self.utt.silence_samples = 0
             self.utt.add(samples)
@@ -249,34 +274,100 @@ class Session:
             # Keep trailing silence as part of the segment until hangover passes.
             self.utt.silence_samples += samples.size
             self.utt.add(samples)
+        else:
+            self._preroll.append(samples)
 
         if not self.utt.is_speaking:
             return
 
-        # Emit an interim transcript periodically for responsiveness.
+        # Finalize first so a silence frame never launches a redundant partial
+        # immediately before the final inference.
+        if self.utt.silence_samples >= _ms_to_samples(SILENCE_HANGOVER_MS) or (
+            self.utt.duration_ms() >= MAX_UTTERANCE_MS
+        ):
+            audio = self.utt.audio()
+            utterance_id = self._utterance_id
+            self.utt.reset()
+            self._preroll.clear()
+            self._utterance_id += 1
+            self._schedule_transcription(audio, is_final=True, utterance_id=utterance_id)
+            return
+
+        # Emit an interim transcript periodically for responsiveness. If the
+        # previous partial is still running, skip this one instead of queuing
+        # stale work and starving the WebSocket receiver.
         if (
             self.utt.samples_since_partial >= _ms_to_samples(PARTIAL_INTERVAL_MS)
             and self.utt.duration_ms() >= MIN_UTTERANCE_MS
         ):
             self.utt.samples_since_partial = 0
-            await self._emit(is_final=False)
+            if self._partial_task is None or self._partial_task.done():
+                audio = self.utt.audio()
+                max_samples = _ms_to_samples(MAX_PARTIAL_WINDOW_MS)
+                if audio.size > max_samples:
+                    audio = audio[-max_samples:]
+                self._schedule_transcription(
+                    audio,
+                    is_final=False,
+                    utterance_id=self._utterance_id,
+                )
 
-        # Finalize on trailing silence or a runaway segment.
-        if self.utt.silence_samples >= _ms_to_samples(SILENCE_HANGOVER_MS) or (
-            self.utt.duration_ms() >= MAX_UTTERANCE_MS
-        ):
-            await self._emit(is_final=True)
-            self.utt.reset()
-
-    async def _emit(self, is_final: bool) -> None:
-        if self.utt.duration_ms() < MIN_UTTERANCE_MS:
+    def _schedule_transcription(
+        self,
+        audio: np.ndarray,
+        *,
+        is_final: bool,
+        utterance_id: int,
+    ) -> None:
+        if audio.size < _ms_to_samples(MIN_UTTERANCE_MS):
             return
-        audio = self.utt.audio()
+        task = asyncio.create_task(
+            self._transcribe_snapshot(audio, is_final=is_final, utterance_id=utterance_id)
+        )
+        self._inference_tasks.add(task)
+        if not is_final:
+            self._partial_task = task
+
+        def task_done(completed: asyncio.Task) -> None:
+            self._inference_tasks.discard(completed)
+            if self._partial_task is completed:
+                self._partial_task = None
+            if not completed.cancelled() and completed.exception() is not None:
+                print(
+                    f"[pneuma-sidecar] Inference task failed: {completed.exception()}",
+                    file=sys.stderr,
+                )
+
+        task.add_done_callback(task_done)
+
+    async def _transcribe_snapshot(
+        self,
+        audio: np.ndarray,
+        *,
+        is_final: bool,
+        utterance_id: int,
+    ) -> None:
+        started = time.monotonic()
         text, confidence = await self.engine.transcribe(audio)
+        elapsed = time.monotonic() - started
+        audio_seconds = audio.size / SAMPLE_RATE
+        print(
+            f"[pneuma-sidecar] {'final' if is_final else 'partial'} inference "
+            f"audio={audio_seconds:.2f}s elapsed={elapsed:.2f}s "
+            f"rtf={elapsed / max(audio_seconds, 0.001):.2f}",
+            file=sys.stderr,
+        )
+
+        if self._closed:
+            return
         if not text:
             return
 
         if not is_final:
+            # A final snapshot increments the ID immediately. Never display an
+            # interim result that completed after its utterance was finalized.
+            if utterance_id != self._utterance_id:
+                return
             # Partials: emit immediately with empty detected_scriptures
             await _send(self.ws, _transcript_message(text, confidence, is_final=False))
             return
@@ -289,21 +380,42 @@ class Session:
         scriptures = parse_scriptures(text)
 
         if not scriptures and self.semantic is not None:
+            # Transcription is the primary live signal. Emit it before lazy
+            # ONNX/LanceDB work so first-use indexing cannot look like a stuck
+            # recognizer on Windows. A matching follow-up updates this chunk.
+            await self._flush_pending()
+            await _send(self.ws, _transcript_message(text, confidence, is_final=True))
+
             # Check semantic cache first
             cached = self._semantic_cache.get(text)
             if cached is not None:
                 scriptures = cached
-                print(f"[pneuma-sidecar] Semantic cache HIT", file=sys.stderr)
+                print("[pneuma-sidecar] Semantic cache HIT", file=sys.stderr)
             else:
                 # Layer 2: semantic vector search on regex miss
                 try:
                     await self.semantic.ensure_ready()
                     scriptures = await self.semantic.search(text)
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[pneuma-sidecar] Semantic search error: {exc}", file=sys.stderr)
+                    print(
+                        f"[pneuma-sidecar] Semantic search error: {exc}",
+                        file=sys.stderr,
+                    )
                 else:
                     self._semantic_cache.put(text, scriptures)
-                    print(f"[pneuma-sidecar] Semantic cache MISS", file=sys.stderr)
+                    print("[pneuma-sidecar] Semantic cache MISS", file=sys.stderr)
+
+            if scriptures:
+                await _send(
+                    self.ws,
+                    _transcript_message(
+                        text,
+                        confidence,
+                        is_final=True,
+                        detected_scriptures=scriptures,
+                    ),
+                )
+            return
 
         if not scriptures:
             await self._flush_pending()
@@ -312,9 +424,7 @@ class Session:
 
         await self._hold_final(text, confidence, scriptures)
 
-    async def _hold_final(
-        self, text: str, confidence: float, scriptures: list[dict]
-    ) -> None:
+    async def _hold_final(self, text: str, confidence: float, scriptures: list[dict]) -> None:
         """Store pending detection and start/reset the hold timer."""
         # If we already have a pending chunk, emit it now (without scriptures)
         if self._hold_task is not None:
@@ -361,21 +471,24 @@ class Session:
             self._pending_confidence = 0.0
             self._pending_scriptures = []
 
-    async def _on_deepgram_transcript(
-        self, text: str, confidence: float, is_final: bool
-    ) -> None:
+    async def _on_deepgram_transcript(self, text: str, confidence: float, is_final: bool) -> None:
         """Callback for Deepgram streaming transcripts."""
         if not is_final:
             await _send(self.ws, _transcript_message(text, confidence, is_final=False))
             return
         await self._process_final_transcript(text, confidence)
 
-    def _on_deepgram_status(self, state: str, message: Optional[str] = None) -> None:
+    def _on_deepgram_status(self, state: str, message: str | None = None) -> None:
         """Forward Deepgram guardrail status events to the client."""
-        asyncio.create_task(_send(self.ws, {
-            "event_type": "STATUS",
-            "payload": {"state": state, "message": message or ""},
-        }))
+        asyncio.create_task(
+            _send(
+                self.ws,
+                {
+                    "event_type": "STATUS",
+                    "payload": {"state": state, "message": message or ""},
+                },
+            )
+        )
 
     async def _switch_engine(self, mode: str) -> None:
         """Switch between cloud and local transcription engines."""
@@ -383,6 +496,8 @@ class Session:
             return
         await self._flush_pending()
         self.utt.reset()
+        self._preroll.clear()
+        self._utterance_id += 1
 
         if mode == "cloud" and self._deepgram_key:
             if self._deepgram is None:
@@ -397,13 +512,17 @@ class Session:
                 await self._deepgram.disconnect()
             self.engine_mode = "local"
 
-        await _send(self.ws, {
-            "event_type": "STATUS",
-            "payload": {"state": "engine_switched", "message": self.engine_mode},
-        })
+        await _send(
+            self.ws,
+            {
+                "event_type": "STATUS",
+                "payload": {"state": "engine_switched", "message": self.engine_mode},
+            },
+        )
 
     async def cleanup(self) -> None:
         """Clean up session resources."""
+        self._closed = True
         await self._flush_pending()
         if self._deepgram is not None:
             await self._deepgram.disconnect()
@@ -416,6 +535,8 @@ class Session:
         mtype = msg.get("type")
         if mtype == "reset":
             self.utt.reset()
+            self._preroll.clear()
+            self._utterance_id += 1
             await self._flush_pending()
         elif mtype == "config":
             engine_val = msg.get("engine")
@@ -460,7 +581,7 @@ class Session:
 
 def make_handler(
     engine: TranscriptionEngine,
-    semantic: Optional[SemanticEngine] = None,
+    semantic: SemanticEngine | None = None,
     engine_mode: str = "local",
     deepgram_key: str = "",
     deepgram_model: str = "nova-3",
@@ -468,7 +589,9 @@ def make_handler(
     async def handler(ws):
         await _send(ws, {"event_type": "STATUS", "payload": {"state": "ready"}})
         session = Session(
-            ws, engine, semantic,
+            ws,
+            engine,
+            semantic,
             engine_mode=engine_mode,
             deepgram_key=deepgram_key,
             deepgram_model=deepgram_model,
@@ -496,8 +619,11 @@ async def serve(
     onnx_model_path: str = "",
     engine_mode: str = "local",
     deepgram_key: str = "",
+    cpu_threads: int = 0,
+    model_path: str = "",
 ) -> None:
-    engine = TranscriptionEngine(model_size=model_size)
+    model_reference = model_path or model_size
+    engine = TranscriptionEngine(model_size=model_reference, cpu_threads=cpu_threads)
     try:
         await asyncio.get_running_loop().run_in_executor(None, engine.load)
     except Exception as exc:  # noqa: BLE001
@@ -505,7 +631,7 @@ async def serve(
         raise
 
     # Initialize semantic engine if paths are provided
-    semantic: Optional[SemanticEngine] = None
+    semantic: SemanticEngine | None = None
     if embeddings_path and lance_path and onnx_model_path:
         semantic = SemanticEngine(
             model_path=onnx_model_path,
@@ -514,7 +640,10 @@ async def serve(
         )
         print("[pneuma-sidecar] Semantic engine configured (lazy load).", file=sys.stderr)
     else:
-        print("[pneuma-sidecar] Semantic engine disabled (no paths provided).", file=sys.stderr)
+        print(
+            "[pneuma-sidecar] Semantic engine disabled (no paths provided).",
+            file=sys.stderr,
+        )
 
     handler = make_handler(engine, semantic, engine_mode, deepgram_key)
     async with websockets.serve(handler, host, port, max_size=None):

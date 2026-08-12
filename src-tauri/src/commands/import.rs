@@ -1,11 +1,13 @@
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::AppHandle;
-use quick_xml::events::Event;
-use quick_xml::Reader;
 
 use crate::db;
+
+type VerseRow = (i64, String, i64, i64, String);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImportResult {
@@ -15,20 +17,72 @@ pub struct ImportResult {
 }
 
 pub const BOOK_NAMES: [&str; 66] = [
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
-    "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
-    "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
-    "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
-    "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations",
-    "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
-    "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk",
-    "Zephaniah", "Haggai", "Zechariah", "Malachi",
-    "Matthew", "Mark", "Luke", "John", "Acts",
-    "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
-    "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
-    "1 Timothy", "2 Timothy", "Titus", "Philemon",
-    "Hebrews", "James", "1 Peter", "2 Peter",
-    "1 John", "2 John", "3 John", "Jude", "Revelation",
+    "Genesis",
+    "Exodus",
+    "Leviticus",
+    "Numbers",
+    "Deuteronomy",
+    "Joshua",
+    "Judges",
+    "Ruth",
+    "1 Samuel",
+    "2 Samuel",
+    "1 Kings",
+    "2 Kings",
+    "1 Chronicles",
+    "2 Chronicles",
+    "Ezra",
+    "Nehemiah",
+    "Esther",
+    "Job",
+    "Psalms",
+    "Proverbs",
+    "Ecclesiastes",
+    "Song of Solomon",
+    "Isaiah",
+    "Jeremiah",
+    "Lamentations",
+    "Ezekiel",
+    "Daniel",
+    "Hosea",
+    "Joel",
+    "Amos",
+    "Obadiah",
+    "Jonah",
+    "Micah",
+    "Nahum",
+    "Habakkuk",
+    "Zephaniah",
+    "Haggai",
+    "Zechariah",
+    "Malachi",
+    "Matthew",
+    "Mark",
+    "Luke",
+    "John",
+    "Acts",
+    "Romans",
+    "1 Corinthians",
+    "2 Corinthians",
+    "Galatians",
+    "Ephesians",
+    "Philippians",
+    "Colossians",
+    "1 Thessalonians",
+    "2 Thessalonians",
+    "1 Timothy",
+    "2 Timothy",
+    "Titus",
+    "Philemon",
+    "Hebrews",
+    "James",
+    "1 Peter",
+    "2 Peter",
+    "1 John",
+    "2 John",
+    "3 John",
+    "Jude",
+    "Revelation",
 ];
 
 fn book_name_to_index(name: &str) -> Option<i64> {
@@ -66,7 +120,7 @@ fn get_conn(app: &AppHandle) -> Result<Connection, String> {
 
 /// Parse OpenSong XML format.
 /// Structure: <bible><b n="Genesis"><c n="1"><v n="1">text</v></c></b></bible>
-fn parse_opensong(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, String> {
+fn parse_opensong(path: &Path) -> Result<Vec<VerseRow>, String> {
     let content = std::fs::read_to_string(path).map_err(|e| format!("File read error: {}", e))?;
     let mut reader = Reader::from_str(&content);
     reader.config_mut().trim_text(true);
@@ -81,45 +135,37 @@ fn parse_opensong(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, S
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"b" => {
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"n" {
-                                    let name = String::from_utf8_lossy(a.value.as_ref()).to_string();
-                                    current_book_name = name.clone();
-                                    current_book_idx = book_name_to_index(&name);
-                                }
-                            }
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"b" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"n" {
+                            let name = String::from_utf8_lossy(attr.value.as_ref()).to_string();
+                            current_book_name = name.clone();
+                            current_book_idx = book_name_to_index(&name);
                         }
                     }
-                    b"c" => {
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"n" {
-                                    current_chapter = String::from_utf8_lossy(a.value.as_ref())
-                                        .parse()
-                                        .unwrap_or(0);
-                                }
-                            }
-                        }
-                    }
-                    b"v" => {
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"n" {
-                                    current_verse = String::from_utf8_lossy(a.value.as_ref())
-                                        .parse()
-                                        .unwrap_or(0);
-                                }
-                            }
-                        }
-                        text_buf.clear();
-                    }
-                    _ => {}
                 }
-            }
+                b"c" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"n" {
+                            current_chapter = String::from_utf8_lossy(attr.value.as_ref())
+                                .parse()
+                                .unwrap_or(0);
+                        }
+                    }
+                }
+                b"v" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"n" {
+                            current_verse = String::from_utf8_lossy(attr.value.as_ref())
+                                .parse()
+                                .unwrap_or(0);
+                        }
+                    }
+                    text_buf.clear();
+                }
+                _ => {}
+            },
             Ok(Event::Text(e)) => {
                 text_buf.push_str(&e.unescape().map_err(|e| format!("XML unescape: {}", e))?);
             }
@@ -151,7 +197,7 @@ fn parse_opensong(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, S
 
 /// Parse Zefania XML format.
 /// Structure: <XMLBIBLE><BIBLEBOOK bnumber="1" bname="Genesis"><CHAPTER cnumber="1"><VERS vnumber="1">text</VERS></CHAPTER></BIBLEBOOK></XMLBIBLE>
-fn parse_zefania(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, String> {
+fn parse_zefania(path: &Path) -> Result<Vec<VerseRow>, String> {
     let content = std::fs::read_to_string(path).map_err(|e| format!("File read error: {}", e))?;
     let mut reader = Reader::from_str(&content);
     reader.config_mut().trim_text(true);
@@ -166,66 +212,55 @@ fn parse_zefania(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, St
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"BIBLEBOOK" => {
-                        let mut bnum: Option<i64> = None;
-                        let mut bname = String::new();
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                match a.key.as_ref() {
-                                    b"bnumber" => {
-                                        bnum = String::from_utf8_lossy(a.value.as_ref())
-                                            .parse()
-                                            .ok();
-                                    }
-                                    b"bname" => {
-                                        bname = String::from_utf8_lossy(a.value.as_ref())
-                                            .to_string();
-                                    }
-                                    _ => {}
-                                }
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"BIBLEBOOK" => {
+                    let mut bnum: Option<i64> = None;
+                    let mut bname = String::new();
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"bnumber" => {
+                                bnum = String::from_utf8_lossy(attr.value.as_ref()).parse().ok();
                             }
-                        }
-                        current_book_idx = if let Some(n) = bnum {
-                            book_number_to_index(n)
-                        } else {
-                            book_name_to_index(&bname)
-                        };
-                        current_book_name = if bname.is_empty() {
-                            current_book_idx
-                                .and_then(|i| BOOK_NAMES.get((i - 1) as usize).map(|s| s.to_string()))
-                                .unwrap_or_default()
-                        } else {
-                            bname
-                        };
-                    }
-                    b"CHAPTER" => {
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"cnumber" {
-                                    current_chapter = String::from_utf8_lossy(a.value.as_ref())
-                                        .parse()
-                                        .unwrap_or(0);
-                                }
+                            b"bname" => {
+                                bname = String::from_utf8_lossy(attr.value.as_ref()).to_string();
                             }
+                            _ => {}
                         }
                     }
-                    b"VERS" => {
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"vnumber" {
-                                    current_verse = String::from_utf8_lossy(a.value.as_ref())
-                                        .parse()
-                                        .unwrap_or(0);
-                                }
-                            }
-                        }
-                        text_buf.clear();
-                    }
-                    _ => {}
+                    current_book_idx = if let Some(n) = bnum {
+                        book_number_to_index(n)
+                    } else {
+                        book_name_to_index(&bname)
+                    };
+                    current_book_name = if bname.is_empty() {
+                        current_book_idx
+                            .and_then(|i| BOOK_NAMES.get((i - 1) as usize).map(|s| s.to_string()))
+                            .unwrap_or_default()
+                    } else {
+                        bname
+                    };
                 }
-            }
+                b"CHAPTER" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"cnumber" {
+                            current_chapter = String::from_utf8_lossy(attr.value.as_ref())
+                                .parse()
+                                .unwrap_or(0);
+                        }
+                    }
+                }
+                b"VERS" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"vnumber" {
+                            current_verse = String::from_utf8_lossy(attr.value.as_ref())
+                                .parse()
+                                .unwrap_or(0);
+                        }
+                    }
+                    text_buf.clear();
+                }
+                _ => {}
+            },
             Ok(Event::Text(e)) => {
                 text_buf.push_str(&e.unescape().map_err(|e| format!("XML unescape: {}", e))?);
             }
@@ -257,7 +292,7 @@ fn parse_zefania(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, St
 
 /// Import from a SQLite database file. Heuristically finds a table with
 /// book/chapter/verse/text columns and maps them.
-fn parse_sqlite(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, String> {
+fn parse_sqlite(path: &Path) -> Result<Vec<VerseRow>, String> {
     let conn = Connection::open(path).map_err(|e| format!("SQLite open error: {}", e))?;
 
     // Find tables
@@ -299,7 +334,9 @@ fn parse_sqlite(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, Str
             l.contains("text") || l == "text" || l == "content" || l == "scripture"
         });
 
-        if let (Some(bc), Some(cc), Some(vc), Some(tc)) = (book_col, chapter_col, verse_col, text_col) {
+        if let (Some(bc), Some(cc), Some(vc), Some(tc)) =
+            (book_col, chapter_col, verse_col, text_col)
+        {
             // Check if book column is numeric or text
             let sample: Option<String> = conn
                 .query_row(
@@ -314,19 +351,14 @@ fn parse_sqlite(path: &Path) -> Result<Vec<(i64, String, i64, i64, String)>, Str
                 .map(|s| s.parse::<i64>().is_ok())
                 .unwrap_or(false);
 
-            let query = if is_numeric_book {
-                format!(
-                    "SELECT {}, {}, {}, {} FROM {}",
-                    cols[bc], cols[cc], cols[vc], cols[tc], table
-                )
-            } else {
-                format!(
-                    "SELECT {}, {}, {}, {} FROM {}",
-                    cols[bc], cols[cc], cols[vc], cols[tc], table
-                )
-            };
+            let query = format!(
+                "SELECT {}, {}, {}, {} FROM {}",
+                cols[bc], cols[cc], cols[vc], cols[tc], table
+            );
 
-            let mut stmt = conn.prepare(&query).map_err(|e| format!("Prepare: {}", e))?;
+            let mut stmt = conn
+                .prepare(&query)
+                .map_err(|e| format!("Prepare: {}", e))?;
             let rows = stmt
                 .query_map([], |r| {
                     let book_val: String = r.get(0)?;
@@ -441,4 +473,60 @@ pub async fn import_bible_sqlite(
         books_found,
         translation_code,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_book_names_count() {
+        assert_eq!(BOOK_NAMES.len(), 66);
+    }
+
+    #[test]
+    fn test_book_name_to_index_exact() {
+        assert_eq!(book_name_to_index("Genesis"), Some(1));
+        assert_eq!(book_name_to_index("John"), Some(43));
+        assert_eq!(book_name_to_index("Revelation"), Some(66));
+    }
+
+    #[test]
+    fn test_book_name_to_index_case_insensitive() {
+        assert_eq!(book_name_to_index("genesis"), Some(1));
+        assert_eq!(book_name_to_index("JOHN"), Some(43));
+        assert_eq!(book_name_to_index("pSalMs"), Some(19));
+    }
+
+    #[test]
+    fn test_book_name_to_index_with_spaces() {
+        assert_eq!(book_name_to_index("1 Samuel"), Some(9));
+        assert_eq!(book_name_to_index("1Samuel"), Some(9));
+        assert_eq!(book_name_to_index("Song of Solomon"), Some(22));
+    }
+
+    #[test]
+    fn test_book_name_to_index_partial_match() {
+        assert_eq!(book_name_to_index("Gen"), Some(1));
+        assert_eq!(book_name_to_index("Rev"), Some(66));
+    }
+
+    #[test]
+    fn test_book_name_to_index_not_found() {
+        assert_eq!(book_name_to_index("Enoch"), None);
+    }
+
+    #[test]
+    fn test_book_number_to_index_valid() {
+        assert_eq!(book_number_to_index(1), Some(1));
+        assert_eq!(book_number_to_index(66), Some(66));
+        assert_eq!(book_number_to_index(43), Some(43));
+    }
+
+    #[test]
+    fn test_book_number_to_index_out_of_range() {
+        assert_eq!(book_number_to_index(0), None);
+        assert_eq!(book_number_to_index(67), None);
+        assert_eq!(book_number_to_index(-1), None);
+    }
 }

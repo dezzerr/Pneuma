@@ -53,23 +53,27 @@ pub fn init_database(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     )?;
     let stale_count = conn.changes();
     if stale_count > 0 {
-        eprintln!("[saas] Closed {} stale cloud session(s) from previous crash.", stale_count);
+        eprintln!(
+            "[saas] Closed {} stale cloud session(s) from previous crash.",
+            stale_count
+        );
         conn.execute(
             "INSERT INTO audit_log (event_type, detail) VALUES (?1, ?2)",
             rusqlite::params![
                 "cloud_session_crash_closed",
-                format!("Closed {} stale session(s) at startup (now_ms={})", stale_count, now_ms)
+                format!(
+                    "Closed {} stale session(s) at startup (now_ms={})",
+                    stale_count, now_ms
+                )
             ],
         )?;
     }
 
     // Check if we need to seed
     let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM local_bible_repository",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM local_bible_repository", [], |row| {
+            row.get(0)
+        })
         .unwrap_or(0);
 
     if count == 0 {
@@ -103,10 +107,110 @@ pub fn import_bible_verses(
             "INSERT INTO local_bible_repository
              (translation_code, book_index, book_name, chapter_number, verse_number, verse_text)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![translation_code, book_index, book_name, chapter, verse, text],
+            rusqlite::params![
+                translation_code,
+                book_index,
+                book_name,
+                chapter,
+                verse,
+                text
+            ],
         )?;
         count += 1;
     }
     tx.commit()?;
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        schema::create_tables(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_create_tables_succeeds() {
+        let conn = Connection::open_in_memory().unwrap();
+        schema::create_tables(&conn).unwrap();
+        // Verify key tables exist
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='local_bible_repository'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_import_bible_verses() {
+        let conn = setup_db();
+        let verses = vec![
+            (
+                1,
+                "Genesis".to_string(),
+                1,
+                1,
+                "In the beginning God created the heaven and the earth.".to_string(),
+            ),
+            (
+                1,
+                "Genesis".to_string(),
+                1,
+                2,
+                "And the earth was without form, and void.".to_string(),
+            ),
+        ];
+        let count = import_bible_verses(&conn, "KJV", &verses).unwrap();
+        assert_eq!(count, 2);
+
+        let db_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM local_bible_repository WHERE translation_code='KJV'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(db_count, 2);
+    }
+
+    #[test]
+    fn test_import_bible_verses_multiple_translations() {
+        let conn = setup_db();
+        let verses_kjv = vec![(
+            43,
+            "John".to_string(),
+            3,
+            16,
+            "For God so loved the world.".to_string(),
+        )];
+        let verses_niv = vec![(
+            43,
+            "John".to_string(),
+            3,
+            16,
+            "For God so loved the world that he gave his one and only Son.".to_string(),
+        )];
+        import_bible_verses(&conn, "KJV", &verses_kjv).unwrap();
+        import_bible_verses(&conn, "NIV", &verses_niv).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM local_bible_repository", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_import_bible_verses_empty() {
+        let conn = setup_db();
+        let count = import_bible_verses(&conn, "KJV", &[]).unwrap();
+        assert_eq!(count, 0);
+    }
 }

@@ -30,8 +30,10 @@ Run from inside `sidecar/` (so the `pneuma_sidecar` package is importable), or:
 PYTHONPATH=sidecar sidecar/.venv/bin/python -m pneuma_sidecar
 ```
 
-The first run downloads the Whisper model weights (cached under
-`~/.cache/huggingface`). Subsequent runs are fully offline.
+Development runs download the Whisper model weights on first use (cached under
+`~/.cache/huggingface`). Release builds download the selected model during CI
+and bundle it under `resources/models`, so an installed app is offline from its
+first launch.
 
 ## Protocol
 
@@ -47,11 +49,11 @@ is emitted empty by the sidecar.
 
 ## Model tiers (PRD FR-2)
 
-| Tier  | Flag           | Footprint        |
-|-------|----------------|------------------|
-| tiny  | `--model tiny` | < 400 MB RAM     |
-| base  | `--model base` | ~800 MB RAM      |
-| small | `--model small`| ~1.5 GB RAM      |
+| Tier  | Flag            | Footprint    |
+| ----- | --------------- | ------------ |
+| tiny  | `--model tiny`  | < 400 MB RAM |
+| base  | `--model base`  | ~800 MB RAM  |
+| small | `--model small` | ~1.5 GB RAM  |
 
 ## Packaging (PyInstaller)
 
@@ -91,8 +93,11 @@ Output: `sidecar\dist\pneuma-sidecar\pneuma-sidecar.exe`
 
 ### Tauri release build
 
-After building the PyInstaller artifact, run:
+Download the release model, build the PyInstaller artifact, then build Tauri:
+
 ```bash
+sidecar/.venv/bin/python scripts/download_whisper_model.py --model base
+cd sidecar && .venv/bin/pyinstaller pneuma_sidecar.spec --noconfirm && cd ..
 npm run tauri build
 ```
 
@@ -104,4 +109,4 @@ sidecar automatically on startup.
 
 - Build on the target platform — macOS builds produce macOS binaries, Windows builds produce Windows binaries.
 - The spec excludes `torch`, `tensorflow`, `scipy`, `pandas` etc. to keep the bundle lean.
-- Whisper model weights are downloaded on first run (cached in `~/.cache/huggingface`). For fully offline installs, pre-seed the cache or bundle the model.
+- CI release builds bundle the base model. A locally built release falls back to the Hugging Face cache/network if the resource model was not downloaded first.

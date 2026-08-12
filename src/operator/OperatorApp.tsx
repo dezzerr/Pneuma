@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { AudioMonitor } from "./components/AudioMonitor";
 import { TranscriptConsole } from "./components/TranscriptConsole";
 import { PreviewCanvas } from "./components/PreviewCanvas";
@@ -16,21 +16,7 @@ import { useOperatorStore } from "./store";
 import { useTauriEvent } from "@/shared/hooks/useTauriEvent";
 import { EVENTS } from "@/shared/events";
 import type { TranscriptChunk, ThemeConfig } from "@/shared/types";
-import {
-  Monitor,
-  Settings2,
-  Presentation,
-  Activity,
-  Menu,
-  Radio,
-  Cloud,
-  HardDrive,
-} from "lucide-react";
-
-interface NdiStatusPayload {
-  active: boolean;
-  error: string | null;
-}
+import { Monitor, Settings2, Presentation, Activity, Menu, HardDrive } from "lucide-react";
 
 function formatSessionTime(ms: number) {
   const totalSeconds = Math.floor(ms / 1000);
@@ -49,35 +35,20 @@ export default function OperatorApp() {
     setCanvasState,
     ingestTranscript,
     setTheme,
-    engineMode,
     liveSync,
     sessionElapsedMs,
     sessionRunning,
     tickSession,
     engineStatus,
     loadSettings,
-    loadSaasState,
-    loadDeepgramKeyStatus,
-    refreshSaasState,
     appSettings,
   } = useOperatorStore();
   useHotkeys();
-  const [ndiActive, setNdiActive] = useState(false);
 
   // Load persisted settings on mount
   useEffect(() => {
     loadSettings();
-    loadSaasState();
-    loadDeepgramKeyStatus();
-  }, [loadSettings, loadSaasState, loadDeepgramKeyStatus]);
-
-  useEffect(() => {
-    if (!sessionRunning || engineMode !== "cloud") return;
-    const interval = setInterval(() => {
-      refreshSaasState();
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [sessionRunning, engineMode, refreshSaasState]);
+  }, [loadSettings]);
 
   // Session timer — ticks only while session is running
   useEffect(() => {
@@ -90,11 +61,6 @@ export default function OperatorApp() {
   // The primary path is the sidecar WebSocket handled in AudioMonitor.
   useTauriEvent<TranscriptChunk>(EVENTS.TRANSCRIPT_CHUNK, (chunk) => {
     ingestTranscript(chunk);
-  });
-
-  // Listen for NDI broadcast status updates
-  useTauriEvent<NdiStatusPayload>(EVENTS.NDI_STATUS, (payload) => {
-    setNdiActive(payload.active);
   });
 
   // Listen for theme updates from presentation window sync
@@ -129,17 +95,27 @@ export default function OperatorApp() {
             </div>
             <div>
               <h1 className="text-sm font-semibold leading-tight">Pneuma</h1>
-              <p className="text-[10px] text-muted-foreground">Live Voice-to-Scripture</p>
+              <p className="text-[10px] text-muted-foreground">
+                Private Beta · Local Voice-to-Scripture
+              </p>
             </div>
           </div>
 
           <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 shadow-panel lg:flex">
             <span className="text-[10px] font-medium text-muted-foreground">SESSION</span>
-            <span className="text-xs font-medium tabular-nums text-foreground">{formatSessionTime(sessionElapsedMs)}</span>
+            <span className="text-xs font-medium tabular-nums text-foreground">
+              {formatSessionTime(sessionElapsedMs)}
+            </span>
             <span className="h-3 w-px bg-border" />
-            <span className={`text-[10px] font-medium ${
-              engineStatus === "running" ? "text-primary" : engineStatus === "paused" ? "text-warning" : "text-muted-foreground"
-            }`}>
+            <span
+              className={`text-[10px] font-medium ${
+                engineStatus === "running"
+                  ? "text-primary"
+                  : engineStatus === "paused"
+                    ? "text-warning"
+                    : "text-muted-foreground"
+              }`}
+            >
               {engineStatus === "running" ? "Live" : engineStatus === "paused" ? "Paused" : "Idle"}
             </span>
           </div>
@@ -158,13 +134,9 @@ export default function OperatorApp() {
             </span>
             <span className="h-3 w-px bg-border" />
             <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              {engineMode === "cloud" ? (
-                <Cloud className="h-3 w-3 text-blue-500" />
-              ) : (
-                <HardDrive className="h-3 w-3" />
-              )}
+              <HardDrive className="h-3 w-3" />
               <span className="font-medium text-foreground capitalize">
-                {engineMode === "cloud" ? "Nova-3" : appSettings.model_tier}
+                {appSettings.model_tier}
               </span>
             </span>
             {liveSync && (
@@ -173,15 +145,6 @@ export default function OperatorApp() {
                 <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
                   <Activity className="h-3 w-3" />
                   Live Sync
-                </span>
-              </>
-            )}
-            {ndiActive && (
-              <>
-                <span className="h-3 w-px bg-border" />
-                <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
-                  <Radio className="h-3 w-3" />
-                  NDI
                 </span>
               </>
             )}

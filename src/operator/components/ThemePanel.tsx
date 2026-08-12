@@ -124,9 +124,7 @@ export function ThemePanel() {
 
         {/* Animation */}
         <div className="flex flex-col justify-center gap-2 rounded-xl border border-border bg-card p-3">
-          <label className="block text-xs font-medium text-muted-foreground">
-            Animation
-          </label>
+          <label className="block text-xs font-medium text-muted-foreground">Animation</label>
           <div className="grid grid-cols-2 gap-1.5">
             {animations.map((a) => (
               <button
@@ -146,9 +144,7 @@ export function ThemePanel() {
 
         {/* Colors + Alpha Background */}
         <div className="flex flex-col justify-center gap-2 rounded-xl border border-border bg-card p-3">
-          <label className="block text-xs font-medium text-muted-foreground">
-            Colors
-          </label>
+          <label className="block text-xs font-medium text-muted-foreground">Colors</label>
           <div className="flex items-center justify-between rounded-lg border border-border bg-background px-2.5 py-1.5">
             <span className="text-xs text-muted-foreground">Text</span>
             <input
@@ -176,9 +172,7 @@ export function ThemePanel() {
             }`}
           >
             <span>Alpha Transparent</span>
-            <span className="text-[10px]">
-              {theme.alphaBackground ? "ON" : "OFF"}
-            </span>
+            <span className="text-[10px]">{theme.alphaBackground ? "ON" : "OFF"}</span>
           </button>
           {theme.alphaBackground && (
             <p className="text-[10px] text-muted-foreground">

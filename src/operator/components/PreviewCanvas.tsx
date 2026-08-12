@@ -114,11 +114,7 @@ export function PreviewCanvas() {
             >
               For God so loved the world, that he gave his only begotten Son...
             </p>
-            <p
-              className="mt-3 text-[10px] uppercase tracking-wide text-white/30"
-            >
-              Theme Preview
-            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-wide text-white/30">Theme Preview</p>
           </div>
         )}
       </div>

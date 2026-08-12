@@ -19,7 +19,6 @@ export function useHotkeys() {
   const {
     verseQueue,
     stagedItem,
-    liveSync,
     toggleLiveSync,
     stageItem,
     goLive,
@@ -33,11 +32,11 @@ export function useHotkeys() {
     (e: KeyboardEvent) => {
       // Don't intercept when typing in inputs/selects/textareas
       const target = e.target as HTMLElement;
-    const isTyping =
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT" ||
-      target.isContentEditable;
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable;
 
       // Tab: toggle between reference and semantic search modes
       if (e.key === "Tab") {
@@ -117,7 +116,17 @@ export function useHotkeys() {
         return;
       }
     },
-    [verseQueue, stagedItem, liveSync, toggleLiveSync, stageItem, goLive, toggleHelpOverlay, toggleSearchMode, searchResultsCount, setRapidSelectIndex]
+    [
+      verseQueue,
+      stagedItem,
+      toggleLiveSync,
+      stageItem,
+      goLive,
+      toggleHelpOverlay,
+      toggleSearchMode,
+      searchResultsCount,
+      setRapidSelectIndex,
+    ],
   );
 
   useEffect(() => {

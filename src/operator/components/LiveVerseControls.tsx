@@ -18,7 +18,7 @@ export function LiveVerseControls() {
       setLivePage(clamped);
       emit(EVENTS.VERSE_PAGE_SET, clamped);
     },
-    [liveVerse, hasMultiple, verses.length, setLivePage]
+    [liveVerse, hasMultiple, verses.length, setLivePage],
   );
 
   // Keyboard shortcuts: Left/Right arrows to navigate pages
@@ -53,9 +53,7 @@ export function LiveVerseControls() {
           <span className="text-xs font-semibold text-primary">{livePage + 1}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs font-semibold text-foreground">
-            {formatRef()}
-          </span>
+          <span className="text-xs font-semibold text-foreground">{formatRef()}</span>
           <span className="text-[10px] text-muted-foreground">
             Verse {livePage + 1} of {verses.length}
           </span>

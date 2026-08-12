@@ -4,12 +4,53 @@ import { ScrollText } from "lucide-react";
 import type { DetectedScripture } from "@/shared/types";
 
 const NUMBER_WORDS = new Set([
-  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
-  "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
-  "eighty", "ninety", "hundred", "thousand", "first", "second", "third", "fourth",
-  "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "chapter", "verse",
-  "verses", "through", "and", "to", "till", "until",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+  "hundred",
+  "thousand",
+  "first",
+  "second",
+  "third",
+  "fourth",
+  "fifth",
+  "sixth",
+  "seventh",
+  "eighth",
+  "ninth",
+  "tenth",
+  "chapter",
+  "verse",
+  "verses",
+  "through",
+  "and",
+  "to",
+  "till",
+  "until",
 ]);
 
 function buildHighlightTokens(scriptures: DetectedScripture[]): Set<string> {
@@ -36,10 +77,7 @@ export function TranscriptConsole() {
     }
   }, [transcriptChunks]);
 
-  const renderHighlightedText = (
-    text: string,
-    scriptures: DetectedScripture[]
-  ) => {
+  const renderHighlightedText = (text: string, scriptures: DetectedScripture[]) => {
     if (scriptures.length === 0) return text;
     const highlightTokens = buildHighlightTokens(scriptures);
     const words = text.split(/(\s+)/);
@@ -47,16 +85,11 @@ export function TranscriptConsole() {
       <span>
         {words.map((word, i) => {
           const clean = word.toLowerCase().replace(/[^a-z0-9]/g, "");
-          const isHighlight =
-            highlightTokens.has(clean) || NUMBER_WORDS.has(clean);
+          const isHighlight = highlightTokens.has(clean) || NUMBER_WORDS.has(clean);
           return (
             <span
               key={i}
-              className={
-                isHighlight
-                  ? "rounded bg-primary/20 px-0.5 text-primary font-medium"
-                  : ""
-              }
+              className={isHighlight ? "rounded bg-primary/20 px-0.5 text-primary font-medium" : ""}
             >
               {word}
             </span>
@@ -75,10 +108,7 @@ export function TranscriptConsole() {
         <h2 className="text-sm font-semibold text-foreground">Live Transcript</h2>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 text-sm leading-relaxed"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 text-sm leading-relaxed">
         {transcriptChunks.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
             <p className="text-sm text-muted-foreground">

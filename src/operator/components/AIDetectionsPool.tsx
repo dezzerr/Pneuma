@@ -3,7 +3,8 @@ import type { VerseQueueItem, PlaylistItem } from "@/shared/types";
 import { Brain, Send, Eye, X, Clock, Plus } from "lucide-react";
 
 export function AIDetectionsPool() {
-  const { verseQueue, verseHistory, updateVerseStatus, stageItem, goLive, addToPlaylist } = useOperatorStore();
+  const { verseQueue, verseHistory, updateVerseStatus, stageItem, goLive, addToPlaylist } =
+    useOperatorStore();
 
   const handleGoLive = (item: VerseQueueItem) => {
     goLive(item);
@@ -61,9 +62,7 @@ export function AIDetectionsPool() {
           <div className="flex h-full items-center justify-center text-center">
             <div className="space-y-1">
               <Clock className="mx-auto h-6 w-6 text-muted-foreground/40" />
-              <p className="text-[10px] text-muted-foreground">
-                No scriptures detected yet.
-              </p>
+              <p className="text-[10px] text-muted-foreground">No scriptures detected yet.</p>
             </div>
           </div>
         ) : (
@@ -78,9 +77,7 @@ export function AIDetectionsPool() {
                     <span className="text-[10px] font-bold text-muted-foreground min-w-[16px]">
                       {idx + 1}
                     </span>
-                    <h3 className="text-xs font-semibold text-foreground">
-                      {formatRef(item)}
-                    </h3>
+                    <h3 className="text-xs font-semibold text-foreground">{formatRef(item)}</h3>
                   </div>
                   <div className="flex items-center gap-1">
                     <span
@@ -100,7 +97,7 @@ export function AIDetectionsPool() {
 
                 {item.verse_text && (
                   <p className="mb-1.5 text-[10px] italic text-muted-foreground line-clamp-2">
-                    "{item.verse_text}"
+                    &quot;{item.verse_text}&quot;
                   </p>
                 )}
 

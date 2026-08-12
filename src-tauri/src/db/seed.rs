@@ -4,20 +4,72 @@ use tauri::{AppHandle, Manager};
 
 // 66 books of the Bible (KJV ordering)
 const BOOK_NAMES: [&str; 66] = [
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
-    "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
-    "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
-    "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
-    "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations",
-    "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
-    "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk",
-    "Zephaniah", "Haggai", "Zechariah", "Malachi",
-    "Matthew", "Mark", "Luke", "John", "Acts",
-    "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
-    "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
-    "1 Timothy", "2 Timothy", "Titus", "Philemon",
-    "Hebrews", "James", "1 Peter", "2 Peter",
-    "1 John", "2 John", "3 John", "Jude", "Revelation",
+    "Genesis",
+    "Exodus",
+    "Leviticus",
+    "Numbers",
+    "Deuteronomy",
+    "Joshua",
+    "Judges",
+    "Ruth",
+    "1 Samuel",
+    "2 Samuel",
+    "1 Kings",
+    "2 Kings",
+    "1 Chronicles",
+    "2 Chronicles",
+    "Ezra",
+    "Nehemiah",
+    "Esther",
+    "Job",
+    "Psalms",
+    "Proverbs",
+    "Ecclesiastes",
+    "Song of Solomon",
+    "Isaiah",
+    "Jeremiah",
+    "Lamentations",
+    "Ezekiel",
+    "Daniel",
+    "Hosea",
+    "Joel",
+    "Amos",
+    "Obadiah",
+    "Jonah",
+    "Micah",
+    "Nahum",
+    "Habakkuk",
+    "Zephaniah",
+    "Haggai",
+    "Zechariah",
+    "Malachi",
+    "Matthew",
+    "Mark",
+    "Luke",
+    "John",
+    "Acts",
+    "Romans",
+    "1 Corinthians",
+    "2 Corinthians",
+    "Galatians",
+    "Ephesians",
+    "Philippians",
+    "Colossians",
+    "1 Thessalonians",
+    "2 Thessalonians",
+    "1 Timothy",
+    "2 Timothy",
+    "Titus",
+    "Philemon",
+    "Hebrews",
+    "James",
+    "1 Peter",
+    "2 Peter",
+    "1 John",
+    "2 John",
+    "3 John",
+    "Jude",
+    "Revelation",
 ];
 
 // Dummy seed verses for development (a few well-known verses)
@@ -78,7 +130,13 @@ const SEED_VERSES: &[(usize, &str, &str)] = &[
 fn clean_text(text: &str) -> String {
     text.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c.is_whitespace() {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -151,11 +209,9 @@ pub fn seed_bible_from_file(
     conn.execute_batch(&sql)?;
     fix_book_names(conn)?;
 
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM local_bible_repository",
-        [],
-        |row| row.get(0),
-    )?;
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM local_bible_repository", [], |row| {
+        row.get(0)
+    })?;
     eprintln!("KJV seed complete: {} verses loaded.", count);
 
     Ok(true)

@@ -1,7 +1,7 @@
 {
   "name": "pneuma",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,17 @@
     "tauri": "tauri",
     "sidecar": "cd sidecar && .venv/bin/python -m pneuma_sidecar --port 8765 --model base",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "test:python": "cd sidecar && .venv/bin/python -m pytest -v",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "lint:python": "cd sidecar && .venv/bin/ruff check pneuma_sidecar && .venv/bin/black --check pneuma_sidecar",
+    "lint:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "check": "npm run lint && npm run format:check && npm run test && npm run lint:rust && npm run test:rust"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -40,6 +50,13 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^9.18.0",
+    "@eslint/js": "^9.18.0",
+    "typescript-eslint": "^8.22.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "prettier": "^3.4.2"
   }
 }

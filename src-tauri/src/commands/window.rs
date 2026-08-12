@@ -14,25 +14,28 @@ pub async fn create_presentation_window(app: tauri::AppHandle) -> Result<(), Str
     }
 
     // Try to find a secondary monitor
-    let mut presentation_window =
-        WebviewWindowBuilder::new(&app, "presentation", tauri::WebviewUrl::App("presentation.html".into()))
-            .title("Pneuma — Presentation")
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true);
+    let mut presentation_window = WebviewWindowBuilder::new(
+        &app,
+        "presentation",
+        tauri::WebviewUrl::App("presentation.html".into()),
+    )
+    .title("Pneuma — Presentation")
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true);
 
     // Try to position on secondary monitor if available
     if let Ok(monitors) = app.available_monitors() {
-        if let Some(secondary) = monitors.iter().find(|m| m.position().x != 0 || m.position().y != 0) {
+        if let Some(secondary) = monitors
+            .iter()
+            .find(|m| m.position().x != 0 || m.position().y != 0)
+        {
             let pos = secondary.position();
             let size = secondary.size();
             let scale = secondary.scale_factor();
             presentation_window = presentation_window
                 .position(pos.x as f64 / scale, pos.y as f64 / scale)
-                .inner_size(
-                    size.width as f64 / scale,
-                    size.height as f64 / scale,
-                );
+                .inner_size(size.width as f64 / scale, size.height as f64 / scale);
         } else {
             // No secondary monitor — windowed mode for dev
             presentation_window = presentation_window
@@ -49,7 +52,10 @@ pub async fn create_presentation_window(app: tauri::AppHandle) -> Result<(), Str
 
     // If we have a secondary monitor, make it fullscreen
     if let Ok(monitors) = app.available_monitors() {
-        if monitors.iter().any(|m| m.position().x != 0 || m.position().y != 0) {
+        if monitors
+            .iter()
+            .any(|m| m.position().x != 0 || m.position().y != 0)
+        {
             if let Some(window) = app.get_webview_window("presentation") {
                 let _ = window.set_fullscreen(true);
             }
