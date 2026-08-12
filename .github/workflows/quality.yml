@@ -120,6 +120,9 @@ jobs:
       - name: Create placeholder API key
         run: echo "" > src-tauri/api_bible_key.txt
 
+      - name: Create placeholder sidecar resource
+        run: mkdir -p sidecar/dist/pneuma-sidecar
+
       - name: Rustfmt check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
