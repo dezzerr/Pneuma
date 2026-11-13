@@ -7,6 +7,7 @@
     import { ai, aiSmartAction, aiSttStatus, aiSuggestions, drawerTabsData, outLocked, scriptures, sttTranscript } from "../../../stores"
     import { translateText } from "../../../utils/language"
     import { Transcript } from "../../stt/transcript"
+    import { audioLevelStore } from "../../stt/stt"
     import { bibleIndexStatus } from "../../scripture/BibleCacheManager"
     import ConfidenceMeter from "./ConfidenceMeter.svelte"
 
@@ -93,6 +94,13 @@
     {/if}
 </div>
 
+<div class="microphone-status">
+    <span>Microphone input</span>
+    <div class="microphone-meter" role="meter" aria-label="Microphone input level" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round($audioLevelStore * 100)}>
+        <div class="microphone-meter-fill" style={`width: ${Math.round($audioLevelStore * 100)}%`}></div>
+    </div>
+    <span>{state === "listening" ? ($audioLevelStore > 0 ? "Receiving audio" : "Listening") : "Not listening"}</span>
+</div>
 <div class="bible-status" role="status">
     <div>Transcription model: {$ai.stt?.engine === "parakeet" ? "Parakeet (local)" : "Nemotron (local)"}</div>
     <div>{bibleStatus}</div>
@@ -211,6 +219,27 @@
         color: #00dfd8;
     }
 
+    .microphone-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+    .microphone-meter {
+        flex: 1;
+        min-width: 50px;
+        height: 8px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 4px;
+    }
+    .microphone-meter-fill {
+        height: 100%;
+        background: #00dfd8;
+        transition: width 100ms linear;
+    }
     .bible-status {
         padding: 9px 14px;
         font-size: 0.85rem;
