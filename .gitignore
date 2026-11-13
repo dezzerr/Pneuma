@@ -1,26 +1,27 @@
-# Secrets
-src-tauri/api_bible_key.txt
+# NPM issue with build on GitHub Actions
+# Error: Cannot find module @rollup/rollup-x-gnu. npm has a bug related to optional dependencies.
+# package-lock.json
 
-# Rust
-src-tauri/target/
+/node_modules/
+/public/build/
+/public/release.json
+/public/*.js.map
+/public/*.ts
+/build/
+/dist/
 
-# Node
-node_modules/
-dist/
+*.env
 
-# Python
-sidecar/.venv/
-sidecar/build/
-sidecar/dist/
-__pycache__/
-*.pyc
-
-# Large model files (use Git LFS or download scripts instead)
-resources/models/all-MiniLM-L6-v2/_st_export/model.safetensors
-
-# Build artifacts
-*.tsbuildinfo
-vite.config.d.ts
-
-# OS
 .DS_Store
+
+test-output/
+test-results/
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.serena
+# Local sermon/model validation assets (not distributed)
+/tmp/
