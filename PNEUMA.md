@@ -32,7 +32,7 @@ Model files and the user's test sermon are not included in source or installers.
 
 ## Validation, 13 November 2026
 
-Production build succeeded. Full unit/integration suite passed all 188 tests, including the reference-correction tests. Desktop smoke test passed on Apple Silicon: startup, first-run setup, create show, edit groups, save and close. Screenshot: test-output/screenshots/pneuma-desktop.png.
+Production build succeeded. Full unit/integration suite passed all 188 tests, including the reference-correction tests. Desktop smoke test passed on Apple Silicon: startup, first-run setup, create show, edit groups, save and close. Screenshot: test-output/screenshots/pneuma-desktop.png. Packaged Apple Silicon application also launched successfully with disposable settings; screenshot: test-output/screenshots/pneuma-packaged.png. Local unsigned DMG created successfully.
 
 Real local recognition used the user-selected YouTube sermon Ky0brGRvEs8, requested range 46:00–51:00. Stream-copy extraction retained approximately ten seconds of preroll (309.97 seconds total). Recognition processed that audio in 33.85 seconds, produced 267 segments and reported no engine errors. This is an offline throughput probe, not an accuracy benchmark or microphone latency measurement. Recognition errors remain in the transcript. Model downloads were checked against upstream SHA-256 hashes.
 
