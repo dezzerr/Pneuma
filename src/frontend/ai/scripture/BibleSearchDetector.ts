@@ -2,6 +2,7 @@ import type { MatchResult } from "../../../types/ai/Ai"
 import type { BibleCacheData } from "./BibleCacheManager"
 import { normalizeMishearings } from "./mishearings"
 import { normalizeNumbers } from "./numbers"
+import { correctSpokenBookReferences } from "./spokenBooks"
 import { normalizeBookName, RANGE_PATTERN, VERSE_PATTERN } from "./referenceDictionary"
 import { normalizeReferences } from "./references"
 
@@ -476,6 +477,7 @@ export class BibleSearchDetector {
         if (this.DEBUG_MODE) console.log("[DETECTION] Starting search with transcript:", transcript)
         if (isCancelled?.()) return null
 
+        const spokenBookCorrection = correctSpokenBookReferences(normalizeNumbers(transcript))
         const mishearingsCorrected = normalizeMishearings(transcript)
         const rawNormalizedNumbers = normalizeNumbers(transcript)
         const mishearingsNormalizedNumbers = normalizeNumbers(mishearingsCorrected)
@@ -488,7 +490,11 @@ export class BibleSearchDetector {
 
         const refMatch = this.findReferenceMatch(mishearingsNormalized) || this.findReferenceMatch(rawNormalized) || this.findStandaloneVerseMatch(mishearingsNormalized, currentlyOutputted) || this.findStandaloneVerseMatch(rawNormalized, currentlyOutputted)
 
-        if (this.DEBUG_MODE) console.log("[DETECTION] Reference match result:", refMatch)
+        // Only offer a corrected book as a suggestion; never present a guess automatically.
+        const correctedRef = spokenBookCorrection.corrected ? this.findReferenceMatch(normalizeReferences(spokenBookCorrection.text, this.cacheData)) : null
+        if (correctedRef) correctedRef.confidence = 50
+
+        if (this.DEBUG_MODE) console.log("[DETECTION] Reference match result:", refMatch || correctedRef)
 
         if (isCancelled?.()) return null
 
@@ -519,6 +525,9 @@ export class BibleSearchDetector {
         if (this.DEBUG_MODE) console.log("[DETECTION] Best content match:", bestContentMatch)
 
         // explicit book/chapter/verse reference has priority
+        // A matching correction is a guess even when an older alias table also
+        // recognised it. Do not allow that table to promote it to auto-present.
+        if (correctedRef && (!refMatch || correctedRef.content === refMatch.content)) return correctedRef
         if (refMatch && refMatch.confidence >= 75) return refMatch
 
         return bestContentMatch || null
