@@ -63,6 +63,11 @@
 <div class="card-body">
     {#if state === "error"}
         <p class="placeholder error">{translateText($aiSttStatus.message || "Something went wrong...")}</p>
+    {:else if state === "loading"}
+        <div class="processing-view" role="status">
+            <div class="spinner large"></div>
+            <p>Starting the speech model. Please wait until listening begins.</p>
+        </div>
     {:else if state === "processing"}
         <div class="processing-view">
             <div class="spinner large"></div>

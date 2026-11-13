@@ -22,6 +22,7 @@ export function parakeetStatus() {
 export class ParakeetTranscriber {
     private child: ChildProcessWithoutNullStreams | null = null
     private stopped = false
+    private ready = false
     private committed = ""
     private bufferedBytes = 0
     constructor(
@@ -65,6 +66,7 @@ export class ParakeetTranscriber {
                 }
                 if (event.type === "ready" && !ready) {
                     ready = true
+                    this.ready = true
                     clearTimeout(timer)
                     resolve()
                     return
@@ -85,7 +87,9 @@ export class ParakeetTranscriber {
     }
     pushAudio(buffer: Uint8Array): void {
         const child = this.child
-        if (!child || this.stopped || !child.stdin.writable) return
+        // Capture starts before model initialization finishes. Do not queue
+        // several seconds of stale audio while the UI still says loading.
+        if (!child || !this.ready || this.stopped || !child.stdin.writable) return
         // Bound queued audio: never let a slow worker grow memory without limit.
         if (this.bufferedBytes > 32000 * 15) {
             this.onError("Parakeet cannot keep up with audio on this computer.")
@@ -98,15 +102,18 @@ export class ParakeetTranscriber {
     }
     async stop(): Promise<void> {
         this.stopped = true
+        this.ready = false
         const child = this.child
         this.child = null
         if (!child || child.exitCode !== null) return
         child.stdin.end()
         await new Promise<void>((resolve) => {
+            // Allow queued speech and the model's lookahead to finish; a
+            // short timeout would silently cut off the end of a sermon.
             const timer = setTimeout(() => {
                 child.kill()
                 resolve()
-            }, 5000)
+            }, 20000)
             child.once("exit", () => {
                 clearTimeout(timer)
                 resolve()

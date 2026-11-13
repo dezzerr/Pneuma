@@ -7,6 +7,7 @@ const names = ["Genesis", "Exodus", "Leviticus", "Habakkuk", "1 Chronicles", "2 
 const references: [string, number, number][] = [
     ["Genesis", 5, 32],
     ["Exodus", 5, 23],
+    ["Leviticus", 1, 17],
     ["Leviticus", 2, 16],
     ["Habakkuk", 1, 17],
     ["Habakkuk", 2, 20],
@@ -62,6 +63,18 @@ describe("actual user transcript with production reference pattern", () => {
         ["Habacock three verse one", "Habakkuk 3:1"]
     ])("detects %s", async (spoken, reference) => {
         expect(await detector.search(spoken, "")).toMatchObject({ type: "scripture", content: reference })
+    })
+    it("detects a follow-on verse after a full reference in the same transcript", async () => {
+        expect(await detector.search("Leviticus one verse one verse two", "Leviticus 1:1")).toMatchObject({ content: "Leviticus 1:2" })
+    })
+    it("keeps a follow-on to a corrected book name in the approval queue", async () => {
+        expect(await detector.search("Habakok one verse one verse two", "")).toMatchObject({ content: "Habakkuk 1:2", confidence: 50 })
+    })
+    it("does not treat a later number in ordinary speech as a follow-on verse", async () => {
+        expect(await detector.search("Leviticus one verse one and we have two children", "Leviticus 1:1")).toMatchObject({ content: "Leviticus 1:1" })
+    })
+    it("prefers the newer explicit book reference", async () => {
+        expect(await detector.search("Leviticus one verse one Acts five verse two", "Leviticus 1:1")).toMatchObject({ content: "Acts 5:2" })
     })
     it("does not auto-present verse one while the speaker is still naming the verse", async () => {
         expect(await detector.search("Genesis chapter five", "")).toBeNull()

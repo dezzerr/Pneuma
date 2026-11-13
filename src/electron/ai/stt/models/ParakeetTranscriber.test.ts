@@ -16,7 +16,11 @@ describe.skipIf(!process.env.PNEUMA_PARAKEET_TEST_PCM)("Parakeet native streamin
             (error) => errors.push(error),
             () => {}
         )
-        await driver.start()
+        const startup = driver.start()
+        // Microphone capture begins before model initialization completes.
+        // This must not enqueue stale audio or exhaust the bounded queue.
+        for (let i = 0; i < 170; i++) driver.pushAudio(new Uint8Array(3200))
+        await startup
         try {
             for (let pos = 0; pos < pcm.length; pos += 16000) {
                 driver.pushAudio(pcm.subarray(pos, pos + 16000))

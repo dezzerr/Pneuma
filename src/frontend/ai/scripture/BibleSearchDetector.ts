@@ -493,8 +493,28 @@ export class BibleSearchDetector {
         const refMatch = this.findReferenceMatch(mishearingsNormalized) || this.findReferenceMatch(rawNormalized) || this.findStandaloneVerseMatch(mishearingsNormalized, currentlyOutputted) || this.findStandaloneVerseMatch(rawNormalized, currentlyOutputted)
 
         // Only offer a corrected book as a suggestion; never present a guess automatically.
-        const correctedRef = spokenBookCorrection.corrected ? this.findReferenceMatch(normalizeReferences(spokenBookCorrection.text, this.cacheData)) : null
+        const correctedNormalized = normalizeReferences(spokenBookCorrection.text, this.cacheData)
+        const correctedRef = spokenBookCorrection.corrected ? this.findReferenceMatch(correctedNormalized) : null
         if (correctedRef) correctedRef.confidence = 50
+
+        // When the speaker immediately follows a complete reference with
+        // "verse two", prefer the newer verse over the earlier full reference.
+        // Require an immediate explicit verse cue to avoid treating numbers in
+        // normal sermon text or an invalid new book as a navigation command.
+        const baseRef = correctedRef && (!refMatch || correctedRef.content === refMatch.content) ? correctedRef : refMatch
+        const baseText = baseRef === correctedRef ? correctedNormalized : mishearingsNormalized
+        if (baseRef && this.cacheData.refRegex) {
+            const refs = Array.from(baseText.matchAll(new RegExp(this.cacheData.refRegex.source, "giu")))
+            const last = refs[refs.length - 1]
+            const tail = last ? baseText.slice((last.index || 0) + last[0].length) : ""
+            if (new RegExp(`^\\s*[,.;:!?-]*\\s*(?:${VERSE_PATTERN})\\s*\\d+\\b`, "iu").test(tail)) {
+                const followOn = this.findStandaloneVerseMatch(tail, baseRef.content)
+                if (followOn) {
+                    if (baseRef.confidence <= 50) followOn.confidence = 50
+                    return followOn
+                }
+            }
+        }
 
         if (this.DEBUG_MODE) console.log("[DETECTION] Reference match result:", refMatch || correctedRef)
 
