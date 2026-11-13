@@ -19,6 +19,7 @@ const ALIASES: Record<string, string> = {
     ecclesiastic: "Ecclesiastes",
     ecclesiastics: "Ecclesiastes",
     ecclesiastes: "Ecclesiastes",
+    habakk: "Habakkuk",
     habakok: "Habakkuk",
     habakuk: "Habakkuk",
     habakkuk: "Habakkuk",

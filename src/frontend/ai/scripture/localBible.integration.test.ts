@@ -33,6 +33,14 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         ]) {
             expect(await detector!.search(text, "")).toMatchObject({ content: reference })
         }
+        for (const [phrase, reference] of [
+            ["Deuteronomy chapter five verse two", "Deuteronomy 5:2"],
+            ["Habakk chapter one verse one", "Habakkuk 1:1"],
+            ["Leviticus chapter two verse one", "Leviticus 2:1"]
+        ]) {
+            Transcript.push({ text: phrase })
+            await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: reference })])), { timeout: 15000 })
+        }
         Transcript.push({ text: "Exodus" })
         Transcript.push({ text: "five verse" })
         Transcript.push({ text: "two" })

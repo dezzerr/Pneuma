@@ -47,6 +47,12 @@ describe("live transcript to scripture suggestions", () => {
         sttTranscript.set({ finalized: "", unprocessed: "" })
         ;(Transcript as any).resetState()
     })
+    it("continues detecting references after the first passage in the same session", async () => {
+        Transcript.push({ text: "Exodus five verse two" })
+        await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:2" })])))
+        Transcript.push({ text: "Exodus five verse three" })
+        await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:3" })])))
+    })
     it("suggests a verse after it arrives across multiple speech segments", async () => {
         Transcript.push({ text: "Exodus" })
         Transcript.push({ text: "five verse" })

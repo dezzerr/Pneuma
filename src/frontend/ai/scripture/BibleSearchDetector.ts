@@ -501,8 +501,17 @@ export class BibleSearchDetector {
         // "verse two", prefer the newer verse over the earlier full reference.
         // Require an immediate explicit verse cue to avoid treating numbers in
         // normal sermon text or an invalid new book as a navigation command.
-        const baseRef = correctedRef && (!refMatch || correctedRef.content === refMatch.content) ? correctedRef : refMatch
-        const baseText = baseRef === correctedRef ? correctedNormalized : mishearingsNormalized
+        const trailingLength = (text: string) => {
+            if (!this.cacheData.refRegex) return Infinity
+            const found = Array.from(text.matchAll(new RegExp(this.cacheData.refRegex.source, "giu")))
+            const last = found[found.length - 1]
+            return last ? text.length - ((last.index || 0) + last[0].length) : Infinity
+        }
+        // A corrected reference spoken after an older exact reference must not
+        // be discarded just because the old reference remains in the overlap.
+        const preferCorrection = correctedRef && (!refMatch || correctedRef.content === refMatch.content || trailingLength(correctedNormalized) < trailingLength(mishearingsNormalized))
+        const baseRef = preferCorrection ? correctedRef : refMatch
+        const baseText = preferCorrection ? correctedNormalized : mishearingsNormalized
         if (baseRef && this.cacheData.refRegex) {
             const refs = Array.from(baseText.matchAll(new RegExp(this.cacheData.refRegex.source, "giu")))
             const last = refs[refs.length - 1]
@@ -549,7 +558,7 @@ export class BibleSearchDetector {
         // explicit book/chapter/verse reference has priority
         // A matching correction is a guess even when an older alias table also
         // recognised it. Do not allow that table to promote it to auto-present.
-        if (correctedRef && (!refMatch || correctedRef.content === refMatch.content)) return correctedRef
+        if (preferCorrection) return correctedRef
         if (refMatch && refMatch.confidence >= 75) return refMatch
 
         return bestContentMatch || null

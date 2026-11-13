@@ -46,6 +46,7 @@ describe("actual user transcript with production reference pattern", () => {
         ["Exodus five verse two", "Exodus 5:2"],
         ["Exodus chapter five verse two", "Exodus 5:2"],
         ["Deuteronomy chapter five verse two", "Deuteronomy 5:2"],
+        ["Habakk chapter one verse one", "Habakkuk 1:1"],
         ["Habakok chapter one verse two", "Habakkuk 1:2"],
         ["Leviticus chapter two verse one", "Leviticus 2:1"],
         ["Genesis five verse three", "Genesis 5:3"],
