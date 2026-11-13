@@ -4,7 +4,7 @@
     import T from "../../../components/helpers/T.svelte"
     import MaterialButton from "../../../components/inputs/MaterialButton.svelte"
     import Center from "../../../components/system/Center.svelte"
-    import { aiSmartAction, aiSttStatus, aiSuggestions, outLocked, scriptures, sttTranscript } from "../../../stores"
+    import { aiSmartAction, aiSttStatus, aiSuggestions, drawerTabsData, outLocked, scriptures, sttTranscript } from "../../../stores"
     import { translateText } from "../../../utils/language"
     import { Transcript } from "../../stt/transcript"
     import ConfidenceMeter from "./ConfidenceMeter.svelte"
@@ -39,6 +39,9 @@
     // confident suggestions surface here so the operator can present them with one click
 
     $: suggestions = $aiSuggestions
+    $: bibleId = $drawerTabsData?.scripture?.activeSubTab
+    $: selectedBible = bibleId ? $scriptures[bibleId] : null
+    $: bibleStatus = !selectedBible ? "Select an imported local Bible in the Scripture tab to detect verses." : selectedBible.api ? "This online Bible cannot be used for automatic detection. Import and select a local Bible in the Scripture tab." : selectedBible.collection ? "Select an individual local Bible rather than a Bible collection for automatic detection." : "Local Bible selected. When listening, Pneuma searches for scripture references and verse text."
 
     function removeSuggestion(id: string) {
         aiSmartAction.update((cur) => (cur?.id === id ? null : cur))
@@ -74,6 +77,8 @@
     {/if}
 </div>
 
+<div class="bible-status" role="status">{bibleStatus}</div>
+
 {#if suggestions.length}
     <div class="suggestions-panel">
         {#each suggestions as suggestion (suggestion.id)}
@@ -82,7 +87,7 @@
                     <span class="reference">
                         {suggestion.content}
 
-                        {#if suggestion.action === "scripture" && suggestion.scriptureTranslation}
+                        {#if suggestion.scriptureTranslation && $scriptures[suggestion.scriptureTranslation]}
                             <span class="translation">({getShortBibleName($scriptures[suggestion.scriptureTranslation]?.name)})</span>
                         {/if}
                     </span>
@@ -185,6 +190,14 @@
         align-items: center;
         gap: 12px;
         color: #00dfd8;
+    }
+
+    .bible-status {
+        padding: 9px 14px;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        white-space: normal;
+        background: rgba(0, 0, 0, 0.18);
     }
 
     .suggestion {
