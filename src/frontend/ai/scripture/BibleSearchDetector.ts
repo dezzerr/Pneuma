@@ -38,7 +38,9 @@ export class BibleSearchDetector {
                 return {
                     type: "scripture",
                     content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`,
-                    confidence: 75
+                    // Live speech can pause between the chapter and verse.
+                    // A chapter-only guess must never be sent live automatically.
+                    confidence: 50
                 }
             }
 
