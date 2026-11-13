@@ -9,6 +9,7 @@ export interface AiSettings {
 interface SttSettings {
     // enabled?: boolean
     micDeviceId?: string
+    pneumaParakeetMigration?: boolean
 
     engine?: string
     // per-engine options

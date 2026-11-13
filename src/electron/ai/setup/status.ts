@@ -1,3 +1,4 @@
+import { parakeetStatus } from "../stt/models/ParakeetTranscriber"
 import type { EngineStatus } from "../../../types/ai/Ai"
 import { getLLMProvider } from "../llm/llmProviders"
 import { getAiKey } from "./aiKeys"
@@ -11,6 +12,8 @@ async function checkConnectionStatus(providerId: "ollama" | "anthropic" | "opena
 export async function aiGetModelStatus(data?: { engineId?: string; modelId?: string; customPath?: string }) {
     const status: Record<string, EngineStatus> = {}
     const { engineId: id, modelId = "", customPath } = data || {}
+
+    if (id === "parakeet") status.parakeet = parakeetStatus()
 
     if (!id || id === "nemotron") status.nemotron = await LocalModelManager.getStatus("nemotron", modelId, customPath)
 

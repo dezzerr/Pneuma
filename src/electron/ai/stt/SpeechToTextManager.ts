@@ -2,10 +2,11 @@ import type { SttEngineOptions } from "../../../types/ai/AiSettings"
 import { ToMain } from "../../../types/IPC/ToMain"
 import { sendToMain } from "../../IPC/main"
 import { LocalModelManager } from "../setup/LocalModelManager"
+import { ParakeetTranscriber, parakeetStatus } from "./models/ParakeetTranscriber"
 import { NemotronTranscriber } from "./models/NemotronTranscriber"
 import type { TranscriberSegment } from "./sttHelper"
 
-type SttEngine = NemotronTranscriber
+type SttEngine = NemotronTranscriber | ParakeetTranscriber
 type SegmentListener = (segment: TranscriberSegment) => void
 
 const sanitizeError = (msg: string) => msg.replace(/\s+/g, " ").trim().slice(0, 200)
@@ -68,6 +69,11 @@ export class SpeechToText {
     }
 
     private static async createEngine(engine: string, options: SttEngineOptions): Promise<{ transcriber: SttEngine } | { error: string }> {
+        if (engine === "parakeet") {
+            const status = parakeetStatus()
+            if (!status.ready) return { error: status.error || "Parakeet could not be initialized" }
+            return { transcriber: new ParakeetTranscriber(this.onSegment, this.onError, this.onInterim) }
+        }
         if (engine === "nemotron") {
             const status = await LocalModelManager.getStatus("nemotron")
             if (!status.ready) return { error: status.error || "Nemotron could not be initialized" }

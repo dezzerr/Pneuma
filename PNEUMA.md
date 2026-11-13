@@ -47,3 +47,11 @@ Input is signed 16-bit little-endian mono PCM at 16 kHz. Keep copyrighted record
 ## Remaining release gates
 
 End-to-end live microphone → correct scripture → operator approval → audience output verification; Windows installer and device validation; Intel Mac engine; full branding review; distribution permissions for any bundled Bible/model content; signing/notarization. The present package is an early development prototype.
+
+## Parakeet local transcription (Apple Silicon prototype)
+
+This build can use the Parakeet Unified English GGUF already installed by Hex, without copying or changing Hex's files or sending audio to a server. It expects `~/Library/Application Support/Hex/models/parakeet-unified-en-0.6b-Q8_0.gguf`. This model is not bundled or redistributed with Pneuma. On this Mac an existing Nemotron setting is switched once if the worker and Hex model are present; choose Nemotron again under Settings → Smart → Transcription if desired. Windows retains Nemotron; Intel Mac transcription remains unsupported. Parakeet is not yet supported on either platform. A missing model or worker results in an explicit error, and Nemotron remains selectable.
+
+The streaming worker is built from MIT-licensed transcribe.cpp commit `275cd50d2c4104c204009a197ac091b9687668e5`; its source, reproducible build script and upstream/third-party notices are in `scripts/parakeet`. The prebuilt Apple Silicon worker is in `resources/parakeet/mac-arm64`. The model has separate NVIDIA licensing. The actual user's model is read in place; no model file is copied or checked into this repository.
+
+With `PNEUMA_PARAKEET_TEST_PCM` pointing to 16 kHz mono s16le audio and the Hex model present, run `npx vitest run --config config/testing/vitest.config.ts src/electron/ai/stt/models/ParakeetTranscriber.test.ts`. A 20-second excerpt of the user-selected sermon was streamed at real-time cadence through the worker and produced the word Ecclesiastes. This is not proof of real microphone performance or Windows support.

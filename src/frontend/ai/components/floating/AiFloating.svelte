@@ -1,5 +1,7 @@
 <script lang="ts">
     import { onDestroy } from "svelte"
+    import { Main } from "../../../../types/IPC/Main"
+    import { requestMain } from "../../../IPC/main"
     import { fade } from "svelte/transition"
     import MaterialButton from "../../../components/inputs/MaterialButton.svelte"
     import MaterialToggleSwitch from "../../../components/inputs/MaterialToggleSwitch.svelte"
@@ -81,6 +83,31 @@
         return words?.length || 0
     }
 
+    // Switch this existing installation once only when Hex's local model and
+    // our compatible worker are actually available. Later user choices persist.
+    let migrationChecked = false
+    let migrationReady = false
+    $: if ($ai.enabled && !migrationChecked) migrateLocalEngine()
+    async function migrateLocalEngine() {
+        migrationChecked = true
+        try {
+            if (!/Macintosh|Mac OS X/i.test(navigator.userAgent) || !$ai.stt || $ai.stt.pneumaParakeetMigration) return
+            const status = await requestMain(Main.AI_GET_STATUS, { engineId: "parakeet" })
+            if (!status?.parakeet?.ready) return
+            ai.update((settings) => {
+                if (settings.stt && !settings.stt.pneumaParakeetMigration && (!settings.stt.engine || settings.stt.engine === "nemotron")) {
+                    settings.stt.engine = "parakeet"
+                    settings.stt.pneumaParakeetMigration = true
+                }
+                return settings
+            })
+        } catch (error) {
+            console.error("Could not check Parakeet availability:", error)
+        } finally {
+            migrationReady = true
+        }
+    }
+
     // STATE & SYNCHRONIZATION
     $: isEnabled = $ai.enabled
     $: micDeviceId = $ai.stt?.micDeviceId
@@ -94,7 +121,7 @@
     }
 
     let sessionToken = 0
-    $: syncSession(isEnabled, micDeviceId, engineId)
+    $: syncSession(isEnabled && migrationReady, micDeviceId, engineId)
     async function syncSession(enabled: boolean | undefined, mic: string | undefined, engine: string) {
         const currentLock = ++sessionToken
         const shouldBeActive = Boolean(enabled && mic)

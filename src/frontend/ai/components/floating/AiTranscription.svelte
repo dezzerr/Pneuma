@@ -4,7 +4,7 @@
     import T from "../../../components/helpers/T.svelte"
     import MaterialButton from "../../../components/inputs/MaterialButton.svelte"
     import Center from "../../../components/system/Center.svelte"
-    import { aiSmartAction, aiSttStatus, aiSuggestions, drawerTabsData, outLocked, scriptures, sttTranscript } from "../../../stores"
+    import { ai, aiSmartAction, aiSttStatus, aiSuggestions, drawerTabsData, outLocked, scriptures, sttTranscript } from "../../../stores"
     import { translateText } from "../../../utils/language"
     import { Transcript } from "../../stt/transcript"
     import { bibleIndexStatus } from "../../scripture/BibleCacheManager"
@@ -88,7 +88,10 @@
     {/if}
 </div>
 
-<div class="bible-status" role="status">{bibleStatus}</div>
+<div class="bible-status" role="status">
+    <div>Transcription model: {$ai.stt?.engine === "parakeet" ? "Parakeet (local)" : "Nemotron (local)"}</div>
+    <div>{bibleStatus}</div>
+</div>
 
 {#if suggestions.length}
     <div class="suggestions-panel">

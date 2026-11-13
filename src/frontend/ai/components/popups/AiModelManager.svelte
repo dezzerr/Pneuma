@@ -26,12 +26,14 @@
 
             if (!a[keys[0]]) a[keys[0]] = {}
             a[keys[0]][keys[1]] = value
+            if (key === "stt.engine") a.stt.pneumaParakeetMigration = true
 
             return a
         })
     }
 
     const sttEngines = [
+        { value: "parakeet", label: "Parakeet", data: "Uses the local English model already downloaded by Hex on Apple Silicon Mac." },
         { value: "nemotron", label: "Nemotron", data: "Transcribes as you speak, so references are picked up almost immediately. Supports around 40 languages." }
         // other models in the future?
     ]
@@ -61,6 +63,9 @@
 
     <MaterialDropdown label="ai.engine" options={sttEngines} value={selectedSttEngine} on:change={(e) => updateValue("stt.engine", e.detail)} />
 
+    {#if selectedSttEngine === "parakeet"}
+        <p style="white-space: normal; padding: 12px;">Parakeet uses the local English model installed by Hex. No audio is sent online. If Hex's model is missing, select Nemotron.</p>
+    {/if}
     {#if selectedSttEngine === "nemotron"}
         <NemotronOptions />
     {/if}

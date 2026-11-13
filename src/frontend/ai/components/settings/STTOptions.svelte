@@ -15,6 +15,7 @@
         ai.update((a) => {
             if (!a.stt) a.stt = {}
             a.stt[key] = value
+            if (key === "engine") a.stt.pneumaParakeetMigration = true
 
             return a
         })
@@ -61,6 +62,15 @@
 </script>
 
 <Title label="ai.transcription" icon="microphone" />
+<MaterialDropdown
+    label="ai.engine"
+    options={[
+        { value: "parakeet", label: "Parakeet (Hex local model — Apple Silicon)" },
+        { value: "nemotron", label: "Nemotron" }
+    ]}
+    value={selectedEngine}
+    on:change={(e) => updateValue("engine", e.detail)}
+/>
 
 <!-- Currently not needed as there's just one engine -->
 <!-- <InputRow>

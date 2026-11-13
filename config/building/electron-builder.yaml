@@ -20,6 +20,12 @@ extraResources:
       to: slideshow
       filter:
           - connector-*
+    - from: resources/parakeet/mac-arm64
+      to: pneuma-parakeet
+    - from: scripts/parakeet/TRANSCRIBE_LICENSE
+      to: pneuma-parakeet/TRANSCRIBE_LICENSE
+    - from: scripts/parakeet/THIRD_PARTY_LICENSES.md
+      to: pneuma-parakeet/THIRD_PARTY_LICENSES.md
 
 # windows
 
