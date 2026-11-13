@@ -14,7 +14,7 @@ vi.mock("../../utils/common", () => ({ newToast: vi.fn() }))
 vi.mock("../llm/llmManager", () => ({ getLLMManager: () => null }))
 vi.mock("./BibleVersionDetector", () => ({ detectBibleVersion: vi.fn() }))
 import { loadJsonBible } from "../../components/drawer/bible/scripture"
-import { aiSuggestions } from "../../stores"
+import { aiSuggestions, sttTranscript } from "../../stores"
 import { Transcript } from "../stt/transcript"
 import { BibleCacheManager } from "./BibleCacheManager"
 
@@ -46,4 +46,35 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         Transcript.push({ text: "two" })
         await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:2" })])), { timeout: 15000 })
     }, 30000)
+    it.skipIf(!process.env.PNEUMA_TEST_STREAM)(
+        "continues detecting references from a recorded real streaming session",
+        async () => {
+            vi.stubGlobal("window", {})
+            const [, bible] = JSON.parse(readFileSync(process.env.PNEUMA_TEST_BIBLE!, "utf8"))
+            vi.mocked(loadJsonBible).mockResolvedValue({ data: bible } as any)
+            await BibleCacheManager.getCache("local")
+            aiSuggestions.set([])
+            sttTranscript.set({ finalized: "", unprocessed: "" })
+            ;(Transcript as any).resetState()
+            let previous = ""
+            for (const line of readFileSync(process.env.PNEUMA_TEST_STREAM!, "utf8").trim().split("\n")) {
+                const event = JSON.parse(line)
+                if (event.type !== "text") continue
+                const current = event.committed || ""
+                if (!current.startsWith(previous)) throw new Error("Committed transcript unexpectedly revised")
+                const delta = current.slice(previous.length)
+                if (delta.trim()) Transcript.push({ text: delta.trim(), glue: !/^\s/.test(delta) && previous.length > 0 })
+                previous = current
+                await new Promise((resolve) => setTimeout(resolve, 40))
+            }
+            await vi.waitFor(
+                () =>
+                    expect(get(aiSuggestions)).toEqual(
+                        expect.arrayContaining([expect.objectContaining({ content: "Deuteronomy 5:2" }), expect.objectContaining({ content: "James 1:2" }), expect.objectContaining({ content: "Leviticus 3:5" }), expect.objectContaining({ content: "Matthew 1:2" }), expect.objectContaining({ content: "Luke 2:3" }), expect.objectContaining({ content: "Acts 1:21" }), expect.objectContaining({ content: "Genesis 1:3" }), expect.objectContaining({ content: "Exodus 5:2" })])
+                    ),
+                { timeout: 15000 }
+            )
+        },
+        30000
+    )
 })
