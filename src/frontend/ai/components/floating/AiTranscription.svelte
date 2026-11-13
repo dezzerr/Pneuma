@@ -7,6 +7,7 @@
     import { aiSmartAction, aiSttStatus, aiSuggestions, drawerTabsData, outLocked, scriptures, sttTranscript } from "../../../stores"
     import { translateText } from "../../../utils/language"
     import { Transcript } from "../../stt/transcript"
+    import { bibleIndexStatus } from "../../scripture/BibleCacheManager"
     import ConfidenceMeter from "./ConfidenceMeter.svelte"
 
     export let state: "loading" | "inactive" | "error" | "listening" | "processing" = "inactive"
@@ -41,7 +42,17 @@
     $: suggestions = $aiSuggestions
     $: bibleId = $drawerTabsData?.scripture?.activeSubTab
     $: selectedBible = bibleId ? $scriptures[bibleId] : null
-    $: bibleStatus = !selectedBible ? "Select an imported local Bible in the Scripture tab to detect verses." : selectedBible.api ? "This online Bible cannot be used for automatic detection. Import and select a local Bible in the Scripture tab." : selectedBible.collection ? "Select an individual local Bible rather than a Bible collection for automatic detection." : "Local Bible selected. When listening, Pneuma searches for scripture references and verse text."
+    $: bibleStatus = !selectedBible
+        ? "Select an imported local Bible in the Scripture tab to detect verses."
+        : selectedBible.api
+          ? "This online Bible cannot be used for automatic detection. Import and select a local Bible in the Scripture tab."
+          : selectedBible.collection
+            ? "Select an individual local Bible rather than a Bible collection for automatic detection."
+            : $bibleIndexStatus[bibleId || ""] === "ready"
+              ? "Bible ready. Listening for scripture references and verse text."
+              : $bibleIndexStatus[bibleId || ""] === "error"
+                ? "Could not load this Bible for detection. Check that it opens in Scripture; Pneuma will retry when you speak."
+                : "Local Bible selected. Start listening and wait while its search index loads."
 
     function removeSuggestion(id: string) {
         aiSmartAction.update((cur) => (cur?.id === id ? null : cur))

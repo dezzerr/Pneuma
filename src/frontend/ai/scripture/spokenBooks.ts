@@ -2,6 +2,7 @@
 // chapter-and-verse cue. A corrected guess must always be approved by an operator.
 const ALIASES: Record<string, string> = {
     deunomy: "Deuteronomy",
+    detronomy: "Deuteronomy",
     deutronomy: "Deuteronomy",
     urmans: "Romans",
     abacok: "Habakkuk",
@@ -18,6 +19,7 @@ const ALIASES: Record<string, string> = {
     ecclesiastic: "Ecclesiastes",
     ecclesiastics: "Ecclesiastes",
     ecclesiastes: "Ecclesiastes",
+    habakok: "Habakkuk",
     habakuk: "Habakkuk",
     habakkuk: "Habakkuk",
     habacook: "Habakkuk",

@@ -1,5 +1,5 @@
 import { Bible } from "json-bible/lib/Bible"
-import { get } from "svelte/store"
+import { get, writable } from "svelte/store"
 import { loadJsonBible } from "../../components/drawer/bible/scripture"
 import { scriptures } from "../../stores"
 import { BibleSearchDetector } from "./BibleSearchDetector"
@@ -21,6 +21,8 @@ export interface BibleCacheData {
     totalVerses: number
 }
 
+export const bibleIndexStatus = writable<Record<string, "loading" | "ready" | "error">>({})
+
 export class BibleCacheManager {
     private static caches: Map<string, BibleSearchDetector> = new Map()
     private static rawCaches: Map<string, BibleCacheData> = new Map()
@@ -30,6 +32,7 @@ export class BibleCacheManager {
         if (this.caches.has(bibleId)) return this.caches.get(bibleId)!
         if (this.cachePromises.has(bibleId)) return await this.cachePromises.get(bibleId)!
 
+        bibleIndexStatus.update((statuses) => ({ ...statuses, [bibleId]: "loading" }))
         const promise = (async () => {
             const scriptureData = get(scriptures)[bibleId]
             if (!scriptureData || scriptureData?.api) return null
@@ -46,7 +49,19 @@ export class BibleCacheManager {
         })()
 
         this.cachePromises.set(bibleId, promise)
-        return await promise
+        try {
+            const result = await promise
+            bibleIndexStatus.update((statuses) => ({ ...statuses, [bibleId]: result ? "ready" : "error" }))
+            return result
+        } catch (error) {
+            bibleIndexStatus.update((statuses) => ({ ...statuses, [bibleId]: "error" }))
+            console.error("Could not build Bible search index:", error)
+            return null
+        } finally {
+            // Failed or temporarily unavailable imports must be retried on the
+            // next transcript instead of caching null/rejection forever.
+            if (this.cachePromises.get(bibleId) === promise) this.cachePromises.delete(bibleId)
+        }
     }
 
     /**

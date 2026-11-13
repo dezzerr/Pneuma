@@ -3,9 +3,15 @@ import { BibleSearchDetector } from "./BibleSearchDetector"
 import { CHAPTER_PATTERN, ORDINAL_PREFIX_PATTERN, VERSE_PATTERN } from "./referenceDictionary"
 import type { BibleCacheData } from "./BibleCacheManager"
 
-const names = ["Genesis", "Habakkuk", "1 Chronicles", "2 Chronicles", "Deuteronomy", "Isaiah", "Acts", "Revelation", "Romans"]
+const names = ["Genesis", "Exodus", "Leviticus", "Habakkuk", "1 Chronicles", "2 Chronicles", "Deuteronomy", "Isaiah", "Acts", "Revelation", "Romans"]
 const references: [string, number, number][] = [
     ["Genesis", 5, 32],
+    ["Exodus", 5, 23],
+    ["Leviticus", 2, 16],
+    ["Habakkuk", 1, 17],
+    ["Habakkuk", 2, 20],
+    ["Deuteronomy", 1, 46],
+    ["Deuteronomy", 2, 37],
     ["Habakkuk", 3, 19],
     ["1 Chronicles", 1, 54],
     ["1 Chronicles", 2, 55],
@@ -33,6 +39,14 @@ const data: BibleCacheData = {
 const detector = new BibleSearchDetector(data)
 describe("actual user transcript with production reference pattern", () => {
     it.each([
+        ["First Chronicles chapter two verse one", "1 Chronicles 2:1"],
+        ["Deutronomy chapter five verse one", "Deuteronomy 5:1"],
+        ["Detronomy one verse one", "Deuteronomy 1:1"],
+        ["Exodus five verse two", "Exodus 5:2"],
+        ["Exodus chapter five verse two", "Exodus 5:2"],
+        ["Deuteronomy chapter five verse two", "Deuteronomy 5:2"],
+        ["Habakok chapter one verse two", "Habakkuk 1:2"],
+        ["Leviticus chapter two verse one", "Leviticus 2:1"],
         ["Genesis five verse three", "Genesis 5:3"],
         ["First Chronicles one verse two", "1 Chronicles 1:2"],
         ["Deunomy five verse two", "Deuteronomy 5:2"],
