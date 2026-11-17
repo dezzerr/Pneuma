@@ -102,7 +102,7 @@
     <span>{state === "listening" ? ($audioLevelStore > 0 ? "Receiving audio" : "Listening") : "Not listening"}</span>
 </div>
 <div class="bible-status" role="status">
-    <div>Transcription model: {$ai.stt?.engine === "parakeet" ? "Parakeet (local)" : $ai.stt?.engine === "whisper" ? "Whisper Base (local)" : "Nemotron (local)"}</div>
+    <div>Transcription model: {$ai.stt?.engine === "parakeet" ? "Parakeet (local)" : $ai.stt?.engine === "whisper" ? "Faster-Whisper Base (Bible vocabulary)" : "Nemotron (local)"}</div>
     <div>{bibleStatus}</div>
 </div>
 

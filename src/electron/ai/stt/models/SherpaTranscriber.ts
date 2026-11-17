@@ -1,4 +1,3 @@
-import { whisperModelDir } from "../../setup/models/whisper"
 import path from "path"
 import type { SttEngineOptions } from "../../../../types/ai/AiSettings"
 import { LocalModelManager } from "../../setup/LocalModelManager"
@@ -28,10 +27,8 @@ export class SherpaTranscriber {
     private stallTimer: NodeJS.Timeout | null = null
     private restarting = false
     private modelDir = ""
-    private acceptingAudio = false
-    private pendingBytes = 0
 
-    constructor(private engine: "nemotron" | "whisper", options: SttEngineOptions, onSegment: (segment: TranscriberSegment) => void, onError: (message: string) => void, onInterim?: (text: string) => void) {
+    constructor(options: SttEngineOptions, onSegment: (segment: TranscriberSegment) => void, onError: (message: string) => void, onInterim?: (text: string) => void) {
         this.options = options
         this.onSegment = onSegment
         this.onError = onError
@@ -39,11 +36,10 @@ export class SherpaTranscriber {
     }
 
     async start() {
-        this.modelDir = this.engine === "whisper" ? whisperModelDir() : LocalModelManager.getModelDir("nemotron")
+        this.modelDir = LocalModelManager.getModelDir("nemotron")
         if (await this.startWorker()) return true
         if (this.startErrorMessage) throw new Error(this.startErrorMessage)
 
-        if (this.engine === "whisper") throw new Error("Could not start the Whisper Base transcription process")
         this.fallback = new NemotronDriver({
             language: this.options.language || "en",
             decodeLanguage: this.options.language,
@@ -67,7 +63,7 @@ export class SherpaTranscriber {
             try {
                 this.post(child, { type: "stop" })
                 await new Promise<void>((resolve) => {
-                    const timer = setTimeout(resolve, this.engine === "whisper" ? 30000 : WORKER_FLUSH_TIMEOUT)
+                    const timer = setTimeout(resolve, WORKER_FLUSH_TIMEOUT)
                     this.stoppedResolve = () => {
                         clearTimeout(timer)
                         resolve()
@@ -88,15 +84,6 @@ export class SherpaTranscriber {
 
     pushAudio(buffer: Uint8Array) {
         if (this.child) {
-            if (this.engine === "whisper") {
-                if (!this.acceptingAudio || this.stopped) return false
-                this.pendingBytes += buffer.byteLength
-                if (this.pendingBytes > 30 * 32000) {
-                    this.acceptingAudio = false
-                    this.onError("Whisper Base fell more than 30 seconds behind live audio.")
-                    return false
-                }
-            }
             this.post(this.child, { type: "audio", data: buffer })
             return true
         }
@@ -117,8 +104,6 @@ export class SherpaTranscriber {
         }
 
         this.child = child
-        this.pendingBytes = 0
-        this.acceptingAudio = false
         this.lastWorkerMessageAt = Date.now()
         this.armStallWatchdog()
 
@@ -128,10 +113,10 @@ export class SherpaTranscriber {
             this.child = null
             this.readyResolve?.(false)
             this.stoppedResolve?.()
-            if (!this.stopped) this.onError(`${this.engine} transcription process exited unexpectedly (code ${code})`)
+            if (!this.stopped) this.onError(`Nemotron transcription process exited unexpectedly (code ${code})`)
         })
 
-        this.post(child, { type: "start", engine: this.engine, language: this.options.language || "en", decodeLanguage: this.options.language, modelDir: this.modelDir })
+        this.post(child, { type: "start", language: this.options.language || "en", decodeLanguage: this.options.language, modelDir: this.modelDir })
 
         const ok = await new Promise<boolean>((resolve) => {
             const timer = setTimeout(() => {
@@ -161,11 +146,7 @@ export class SherpaTranscriber {
         const handlers: Record<string, () => void> = {
             segment: () => message.type === "segment" && this.onSegment(message.segment),
             interim: () => message.type === "interim" && this.onInterim?.(message.text),
-            ready: () => {
-                this.acceptingAudio = true
-                this.readyResolve?.(true)
-            },
-            consumed: () => { if (message.type === "consumed") this.pendingBytes -= message.bytes },
+            ready: () => this.readyResolve?.(true),
             stopped: () => this.stoppedResolve?.(),
             error: () => {
                 if (message.type !== "error") return
@@ -220,7 +201,7 @@ export class SherpaTranscriber {
 
         try {
             const ok = await this.startWorker()
-            if (!ok && !this.stopped) this.onError(this.startErrorMessage || `${this.engine} transcription process could not be restarted`)
+            if (!ok && !this.stopped) this.onError(this.startErrorMessage || `Nemotron transcription process could not be restarted`)
         } finally {
             this.restarting = false
         }

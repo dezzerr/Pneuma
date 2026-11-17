@@ -38,11 +38,12 @@ vi.mock("../scripture/BibleCacheManager", async () => {
     })
     return { BibleCacheManager: { getCache: vi.fn(async () => detector), preloadAllInBackground: vi.fn() } }
 })
-import { aiSuggestions, sttTranscript } from "../../stores"
+import { ai, aiSuggestions, sttTranscript } from "../../stores"
 import { Transcript } from "./transcript"
 
 describe("live transcript to scripture suggestions", () => {
     beforeEach(() => {
+        ai.set({ enabled: true, scripture: { confidence: "ask" } })
         aiSuggestions.set([])
         sttTranscript.set({ finalized: "", unprocessed: "" })
         ;(Transcript as any).resetState()
@@ -52,6 +53,20 @@ describe("live transcript to scripture suggestions", () => {
         await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:2" })])))
         Transcript.push({ text: "Exodus five verse three" })
         await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:3" })])))
+    })
+    it("shows interim Faster-Whisper text and detects only the finalized verse", async () => {
+        vi.useFakeTimers()
+        try {
+            ai.update((settings) => ({ ...settings, stt: { engine: "whisper" } }))
+            Transcript.push({ text: "Exodus 5:2", interim: true })
+            await vi.advanceTimersByTimeAsync(400)
+            expect(get(sttTranscript).unprocessed).toBe("Exodus 5:2")
+            expect(get(aiSuggestions)).toEqual([])
+            Transcript.push({ text: "Exodus 5:3" })
+            await vi.waitFor(() => expect(get(aiSuggestions).map((item) => item.content)).toEqual(["Exodus 5:3"]))
+        } finally {
+            vi.useRealTimers()
+        }
     })
     it("keeps every complete reference in a single finalized phrase", async () => {
         Transcript.push({ text: "Exodus 5:2. Exodus 5:3." })

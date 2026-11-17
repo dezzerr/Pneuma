@@ -27,7 +27,8 @@ export class Transcript {
     private static readonly INTERIM_DEBOUNCE_MS = 350
 
     static push(part: TranscriptPart) {
-        if (!get(ai).enabled) return
+        const settings = get(ai)
+        if (!settings.enabled) return
 
         const textPart = part.text.trim()
 
@@ -46,6 +47,12 @@ export class Transcript {
         if (this.interimTimeout) clearTimeout(this.interimTimeout)
 
         if (part.interim) {
+            // The original Faster-Whisper integration looked up references
+            // after final decoding, when verse numbers have settled.
+            if (settings.stt?.engine === "whisper") {
+                this.interimTimeout = null
+                return
+            }
             this.interimTimeout = setTimeout(() => {
                 this.interimTimeout = null
                 this.processPendingChunk(false)

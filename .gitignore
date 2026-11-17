@@ -29,3 +29,5 @@ test-results/
 /resources/whisper-base/*.onnx
 /resources/whisper-base/base-tokens.txt
 /resources/whisper-base/*.partial
+/resources/whisper-base/model/
+/resources/whisper-base/worker/

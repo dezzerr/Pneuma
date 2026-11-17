@@ -20,6 +20,10 @@ beforePack: scripts/prepare-whisper.cjs
 extraResources:
     - from: resources/whisper-base
       to: whisper-base
+      filter:
+          - model/**
+          - worker/**
+          - LICENSE-*
     - from: node_modules/slideshow/
       to: slideshow
       filter:

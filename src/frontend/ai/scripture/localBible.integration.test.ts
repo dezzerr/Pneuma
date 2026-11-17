@@ -26,6 +26,8 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         const detector = await BibleCacheManager.getCache("local")
         expect(detector).not.toBeNull()
         expect(await detector!.search("the verticals chapter 5 verse 8. Leviticus chapter 1 verse 2.", "")).toMatchObject({ content: "Leviticus 1:2", confidence: 98 })
+        expect(await detector!.search("Genesis 1 vs 2", "")).toMatchObject({ content: "Genesis 1:2", confidence: 98 })
+        expect(await detector!.search("Haba cook, chapter 5, verse 2", "")).toBeNull()
         expect(detector!.findFinalReferences("Genesis 1:2. Ecclesiastes, chapter 3, verse 1. Malachi 3 verse 10.", "").map((match) => match.content)).toEqual([
             "Genesis 1:2", "Ecclesiastes 3:1", "Malachi 3:10"
         ])
