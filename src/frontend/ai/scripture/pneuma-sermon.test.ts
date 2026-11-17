@@ -23,6 +23,16 @@ describe("sermon scripture detection", () => {
         expect(match).toMatchObject({ type: "scripture", content: "Ecclesiastes 9:8", confidence: 50 })
     })
     it.each([
+        ["Leviticus 5x8", "Leviticus", 5, 8],
+        ["the verticals chapter 5 verse 8", "Leviticus", 5, 8],
+        ["Romans 2-1", "Romans", 2, 1],
+        ["have a cook, chapter 1, this one", "Habakkuk", 1, 1],
+        ["Habakkuk, Chapter 1, there's one", "Habakkuk", 1, 1],
+        ["have a clock chapter 1 this too", "Habakkuk", 1, 2],
+        ["Habacle, chapter 1, verse 2", "Habakkuk", 1, 2],
+        ["Trinomy 1 vs 2", "Deuteronomy", 1, 2],
+        ["Detronomy 1 vs 2", "Deuteronomy", 1, 2],
+        ["Deutronomy 1 vs 2", "Deuteronomy", 1, 2],
         ["firnicales three one", "1 Chronicles", 3, 1],
         ["habacook three two", "Habakkuk", 3, 2],
         ["malakai chapter one verse one", "Malachi", 1, 1],

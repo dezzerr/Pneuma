@@ -26,6 +26,13 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         const detector = await BibleCacheManager.getCache("local")
         expect(detector).not.toBeNull()
         for (const [text, reference] of [
+            ["Genesis 5 Genesis 5.2", "Genesis 5:2"],
+            ["Genesis 5.2 Leviticus 5x8", "Leviticus 5:8"],
+            ["the verticals chapter 5 verse 8. Leviticus chapter 1 verse 2.", "Leviticus 1:2"],
+            ["Romans 2-1", "Romans 2:1"],
+            ["Romans chapter 2 verse 1. have a cook, chapter 1, this one.", "Habakkuk 1:1"],
+            ["Habakkuk, Chapter 1, there's one. have a clock chapter 1 this too.", "Habakkuk 1:2"],
+            ["Habacle, chapter 1, verse 2. Trinomy 1 vs 2", "Deuteronomy 1:2"],
             ["First Chronicles chapter two verse one", "1 Chronicles 2:1"],
             ["Exodus five verse two", "Exodus 5:2"],
             ["Deuteronomy chapter five verse two", "Deuteronomy 5:2"],

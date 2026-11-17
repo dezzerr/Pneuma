@@ -479,7 +479,7 @@ export class BibleSearchDetector {
         if (this.DEBUG_MODE) console.log("[DETECTION] Starting search with transcript:", transcript)
         if (isCancelled?.()) return null
 
-        const spokenBookCorrection = correctSpokenBookReferences(normalizeNumbers(transcript))
+        const spokenBookCorrection = correctSpokenBookReferences(normalizeNumbers(transcript), this.cacheData.bookNames)
         const mishearingsCorrected = normalizeMishearings(transcript)
         const rawNormalizedNumbers = normalizeNumbers(transcript)
         const mishearingsNormalizedNumbers = normalizeNumbers(mishearingsCorrected)

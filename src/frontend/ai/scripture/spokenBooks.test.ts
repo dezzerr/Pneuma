@@ -15,6 +15,9 @@ describe("spoken Bible book correction", () => {
         const result = correctSpokenBookReferences(normalizeNumbers(input))
         expect(result).toEqual({ text: expected, corrected: true })
     })
+    it.each(["have a cook for dinner", "have a clock this too", "Romans 2-5", "Habakkuk chapter 1 this morning", "a box 5x8"])("leaves ambiguous speech alone: %s", (input) => {
+        expect(correctSpokenBookReferences(normalizeNumbers(input), ["Romans", "Habakkuk"]).corrected).toBe(false)
+    })
     it.each(["the chronicles of our church", "malakai chapter 3", "habakuk is a name", "I saw malakai chapter 3 verse ten"])("does not change non-reference text: %s", (text) => {
         expect(correctSpokenBookReferences(text).corrected).toBe(false)
     })
