@@ -21,7 +21,7 @@ import { getItemText } from "../../edit/scripts/textStyle"
 import { clone, removeDuplicates } from "../../helpers/array"
 import { history } from "../../helpers/history"
 import { getMediaStyle } from "../../helpers/media"
-import { getAllNormalOutputs, getFirstActiveOutput, setOutput } from "../../helpers/output"
+import { getActiveOutputs, getAllNormalOutputs, getFirstActiveOutput, setOutput } from "../../helpers/output"
 import { checkName } from "../../helpers/show"
 
 const SCRIPTURE_API_URL = "https://api.churchapps.org/content/bibles"
@@ -342,6 +342,7 @@ export async function playScripture() {
 
     const [previousSlides, nextSlides] = await Promise.all([getPreviousSlides(), getNextSlides()])
 
+    if (get(outLocked) || !getActiveOutputs(undefined, true, false, true).length || !tempItems.length) return false
     setOutput("slide", { id: "temp", categoryId, tempItems, previousSlides, nextSlides, attributionString, translations: biblesContent.length, settings, customDynamicValues: slideDynamicValues[0] })
 
     // track
@@ -356,7 +357,7 @@ export async function playScripture() {
     const templateBackground = _template.getSetting("backgroundPath")
 
     // play template background
-    if (!templateBackground) return
+    if (!templateBackground) return true
 
     // get style (for media "fit")
     const currentOutput = getFirstActiveOutput()
@@ -364,6 +365,7 @@ export async function playScripture() {
 
     const mediaStyle = getMediaStyle(get(media)[templateBackground], currentStyle)
     setOutput("background", { path: templateBackground, loop: true, muted: true, ...mediaStyle })
+    return true
 
     ///
 

@@ -53,6 +53,16 @@ describe("live transcript to scripture suggestions", () => {
         Transcript.push({ text: "Exodus five verse three" })
         await vi.waitFor(() => expect(get(aiSuggestions)).toEqual(expect.arrayContaining([expect.objectContaining({ content: "Exodus 5:3" })])))
     })
+    it("keeps every complete reference in a single finalized phrase", async () => {
+        Transcript.push({ text: "Exodus 5:2. Exodus 5:3." })
+        await vi.waitFor(() => expect(get(aiSuggestions).map((item) => item.content)).toEqual(["Exodus 5:3", "Exodus 5:2"]))
+    })
+    it("keeps references when final phrases arrive before earlier searches finish", async () => {
+        Transcript.push({ text: "Exodus 5:2" })
+        Transcript.push({ text: "Exodus 5:3" })
+        Transcript.push({ text: "Exodus 5:4" })
+        await vi.waitFor(() => expect(get(aiSuggestions).map((item) => item.content)).toEqual(["Exodus 5:4", "Exodus 5:3", "Exodus 5:2"]))
+    })
     it("suggests a verse after it arrives across multiple speech segments", async () => {
         Transcript.push({ text: "Exodus" })
         Transcript.push({ text: "five verse" })

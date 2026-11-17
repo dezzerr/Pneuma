@@ -10,55 +10,41 @@ export class BibleSearchDetector {
     constructor(private cacheData: BibleCacheData) {}
 
     public findReferenceMatch(cleanInput: string): MatchResult | null {
-        if (!this.cacheData.refRegex) return null
+        return Array.from(this.referenceMatches(cleanInput, true)).at(-1) || null
+    }
 
-        const globalRegex = new RegExp(this.cacheData.refRegex.source, "giu")
-        const matches = Array.from(cleanInput.matchAll(globalRegex))
-        if (matches.length === 0) return null
+    // Final transcript text may contain several complete references. Keep
+    // them in speech order, and skip passages already complete in the overlap.
+    public findFinalReferences(text: string, overlap: string): MatchResult[] {
+        const normalize = (value: string) => normalizeReferences(normalizeNumbers(value), this.cacheData)
+        const previous = Array.from(this.referenceMatches(normalize(overlap), false))
+        const current = Array.from(this.referenceMatches(normalize(text), false))
+        let repeated = 0
+        while (repeated < previous.length && previous[repeated].content === current[repeated]?.content) repeated++
+        return current.slice(repeated)
+    }
 
-        for (let i = matches.length - 1; i >= 0; i--) {
-            const refMatch = matches[i]
-            const matchIndex = refMatch.index ?? 0
-            const matchLength = refMatch[0].length
+    private *referenceMatches(cleanInput: string, includeChapterOnly: boolean): Generator<MatchResult> {
+        if (!this.cacheData.refRegex) return
+        const regex = new RegExp(this.cacheData.refRegex.source, "giu")
+        for (const refMatch of cleanInput.matchAll(regex)) {
+            if (includeChapterOnly && cleanInput.length - (refMatch.index + refMatch[0].length) > 120) continue
+            const book = normalizeBookName(refMatch[1]).toLowerCase()
+            const chapter = Number(refMatch[2])
+            const start = Number(refMatch[3])
+            const end = Number(refMatch[4])
+            const chapterData = this.cacheData.referenceIndex.get(`${book} ${chapter}`)
+            if (!chapterData?.verseCount) continue
 
-            if (cleanInput.length - (matchIndex + matchLength) > 120) continue
-
-            const matchedBookName = normalizeBookName(refMatch[1])
-
-            const chapterNum = parseInt(refMatch[2], 10)
-            const startVerseNum = refMatch[3] ? parseInt(refMatch[3], 10) : undefined
-            const endVerseNum = refMatch[4] ? parseInt(refMatch[4], 10) : undefined
-
-            const refKey = `${matchedBookName.toLowerCase()} ${chapterNum}`
-            const chapterData = this.cacheData.referenceIndex.get(refKey)
-            if (!chapterData) continue
-
-            if (!startVerseNum) {
-                if (chapterData.verseCount < 1) continue
-                return {
-                    type: "scripture",
-                    content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`,
-                    // Live speech can pause between the chapter and verse.
-                    // A chapter-only guess must never be sent live automatically.
-                    confidence: 50
-                }
+            if (!refMatch[3]) {
+                if (includeChapterOnly) yield { type: "scripture", content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`, confidence: 50 }
+                continue
             }
+            if (start < 1 || start > chapterData.verseCount || (end && end > chapterData.verseCount)) continue
 
-            if (startVerseNum < 1 || startVerseNum > chapterData.verseCount) continue
-
-            let referenceContent = `${chapterData.bookName} ${chapterData.chapterNumber}:${startVerseNum}`
-            if (endVerseNum && endVerseNum > startVerseNum) {
-                referenceContent += `-${endVerseNum}`
-            }
-
-            return {
-                type: "scripture",
-                content: referenceContent,
-                confidence: 98
-            }
+            const reference = `${chapterData.bookName} ${chapterData.chapterNumber}:${start}`
+            yield { type: "scripture", content: end > start ? `${reference}-${end}` : reference, confidence: 98 }
         }
-
-        return null
     }
 
     public findStandaloneVerseMatch(cleanInput: string, currentlyOutputted?: string | null): MatchResult | null {

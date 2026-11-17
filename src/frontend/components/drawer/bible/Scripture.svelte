@@ -443,23 +443,24 @@
     // WIP move this?
     // select book & chapter when opening bible show reference
     $: if ($openScripture) setTimeout(openReference, 200)
-    function openReference() {
-        if ($openScripture?.book === undefined) {
+    async function openReference() {
+        const request = $openScripture
+        if (request?.book === undefined) {
             openScripture.set(null)
             return
         }
 
         resetContentSearch()
 
-        if ($openScripture.play) playWhenLoaded = true
+        if (request.play && !request.onPresented) playWhenLoaded = true
 
-        let verses = $openScripture.verses
+        let verses = request.verses
         if (!Array.isArray(verses)) verses = [[1]]
         if (!Array.isArray(verses[0])) verses = [verses]
 
-        openBook(Number($openScripture.book), [$openScripture.chapter], verses)
-
         openScripture.set(null)
+        const opened = await openBook(Number(request.book), [request.chapter], verses)
+        if (opened && request.play && request.onPresented && await playScripture()) request.onPresented()
     }
 
     /// HISTORY ///

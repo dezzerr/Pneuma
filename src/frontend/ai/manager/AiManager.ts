@@ -18,17 +18,24 @@ export class AiManager {
     private static MAX_LLM_REQUEST_AFTER_MATCH = 5000
     private static latestSearchId: number = 0
 
-    static async processSTTChunk(chunk: { chunkWithOverlap: string; newWordsCount: number; confidence?: number }) {
+    static async processSTTChunk(chunk: { chunkWithOverlap: string; newWordsCount: number; confidence?: number; finalizedOverlap?: string }) {
         this.triggerBackgroundPreload()
 
         const searchId = ++this.latestSearchId
         const isCancelled = () => searchId !== this.latestSearchId
 
-        const stringMatch = await this.stringDetection(chunk.chunkWithOverlap, isCancelled)
+        const exact = chunk.finalizedOverlap === undefined ? [] : await this.finalReferenceDetection(chunk.chunkWithOverlap, chunk.finalizedOverlap)
+        const stringMatch = isCancelled() ? null : await this.stringDetection(chunk.chunkWithOverlap, isCancelled)
+
+        // Exact final references survive later transcript events. Route the
+        // most recent result to auto-present and keep the rest as suggestions.
+        const fallback = !isCancelled() && stringMatch && !exact.some((match) => match.content === stringMatch.content) ? stringMatch : null
+        exact.forEach((match, i) => this.newMatch(match, !isCancelled() && !fallback && i === exact.length - 1))
+        if (exact.length) this.lastMatch = Date.now()
         if (isCancelled()) return
 
-        if (stringMatch) {
-            this.newMatch(stringMatch)
+        if (fallback) {
+            this.newMatch(fallback)
             this.lastMatch = Date.now()
             return
         }
@@ -40,10 +47,18 @@ export class AiManager {
 
         // only report to LLM if nothing is auto detected
         const llmMatch = await llmManager.detectMatch(chunk)
-        if (llmMatch) {
+        if (!isCancelled() && llmMatch) {
             this.newMatch(llmMatch)
             this.lastMatch = Date.now()
         }
+    }
+
+    private static async finalReferenceDetection(text: string, overlap: string) {
+        const bibleId = get(drawerTabsData)?.scripture?.activeSubTab
+        if (!bibleId || get(scriptures)[bibleId]?.api) return []
+        const cache = await BibleCacheManager.getCache(bibleId)
+        if (!cache || bibleId !== get(drawerTabsData)?.scripture?.activeSubTab) return []
+        return cache.findFinalReferences(text, overlap).map((match) => ({ ...match, scriptureTranslation: bibleId }))
     }
 
     private static async stringDetection(textChunk: string, isCancelled?: () => boolean) {
@@ -99,7 +114,7 @@ export class AiManager {
                 if (id === activeBibleId) return
 
                 const otherMatch = await this.bibleDetection(id, textChunk, isCancelled)
-                if (otherMatch?.confidence && otherMatch.confidence > highestConfidence) {
+                if (!isCancelled?.() && otherMatch?.confidence && otherMatch.confidence > highestConfidence) {
                     highestConfidence = otherMatch.confidence
                     this.newMatch({ ...otherMatch, scriptureIsNewTranslation: true })
                 }
@@ -122,7 +137,7 @@ export class AiManager {
 
     /////
 
-    static newMatch(match: MatchResult) {
+    static newMatch(match: MatchResult, allowAutoPlay = true) {
         if (match.type === "empty" || !match.content) return
         if (match.type === "scripture" && AiManager.liveContent === match.content) return
 
@@ -137,24 +152,18 @@ export class AiManager {
         suggestionDraft.scriptureTranslation = match.scriptureTranslation
 
         const trigger = () => this.triggerMatchAction(match)
-
-        if (this.shouldAutoPlay(match)) {
-            const suggestion = { ...suggestionDraft, action: "presented" }
-            this.addSuggestion(suggestion)
-
-            console.info(`Auto-playing ${match.type}:`, match.content)
-            trigger()
-            return
-        }
-
-        if (match.type === "scripture_version") {
-            const suggestion = { ...suggestionDraft, action: "open_scripture", trigger }
-            this.addSuggestion(suggestion)
-            return
-        }
-
-        const suggestion = { ...suggestionDraft, action: "present", trigger }
+        const action = match.type === "scripture_version" ? "open_scripture" : "present"
+        const suggestion = { ...suggestionDraft, action, trigger }
+        const autoPlay = allowAutoPlay && this.shouldAutoPlay(match)
         this.addSuggestion(suggestion)
+
+        if (autoPlay) {
+            this.triggerMatchAction(match, () => {
+                const presented = { ...suggestion, action: "presented", trigger: undefined }
+                aiSuggestions.update((list) => list.map((item) => (item.id === suggestion.id ? presented : item)))
+                if (get(aiSmartAction)?.id === suggestion.id) this.setSmartAction(presented)
+            })
+        }
     }
 
     private static alreadySuggested(match: MatchResult): boolean {
@@ -199,22 +208,16 @@ export class AiManager {
     }
 
     static liveContent: string = ""
-    private static triggerMatchAction(match: MatchResult) {
+    private static triggerMatchAction(match: MatchResult, onPresented?: () => void) {
         if (match.type === "scripture_version") {
             if (match.scriptureTranslation) setActiveScripture(match.scriptureTranslation)
         } else if (match.type === "scripture") {
-            startScripture({ id: match.scriptureTranslation, reference: match.content })
-            this.outputUpdate(match.content)
+            startScripture({ id: match.scriptureTranslation, reference: match.content }, () => {
+                this.liveContent = match.content
+                this.lastOutputUpdate = 0
+                onPresented?.()
+            }).catch((error) => console.error("Could not present detected scripture:", error))
         }
-    }
-
-    private static outputUpdate(content: string) {
-        this.liveContent = content
-
-        setTimeout(() => {
-            // reset output updates when not "manually" played
-            this.lastOutputUpdate = 0
-        }, 500)
     }
 
     /////
@@ -270,10 +273,13 @@ export class AiManager {
             const slide = firstOutput?.out?.slide || null
 
             const slideKey = JSON.stringify(slide)
-            if (slideKey === JSON.stringify(previousOutput)) return
+            if (slideKey === previousOutput) return
             previousOutput = slideKey
 
-            if (initialized) this.lastOutputUpdate = Date.now()
+            if (initialized) {
+                this.liveContent = ""
+                this.lastOutputUpdate = Date.now()
+            }
         })
     }
 }

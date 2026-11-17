@@ -696,7 +696,7 @@ export function getClearedState() {
 
 // "1.1.1,2,3" = "Gen 1:1-3"
 // or "John 3:16" / "1 John 1:4-6"
-export async function startScripture(data: API_scripture) {
+export async function startScripture(data: API_scripture, onPresented?: () => void) {
     const split = data.reference.split(".")
     const book = Number(split[0])
     const chapter = Number(split[1])
@@ -726,7 +726,7 @@ export async function startScripture(data: API_scripture) {
     if (data.id) setDrawerTabData("scripture", data.id) // use active if no ID
     activeDrawerTab.set("scripture")
 
-    openScripture.set({ ...ref, play: data.play !== false })
+    openScripture.set({ ...ref, play: data.play !== false, onPresented })
 }
 
 // MEDIA
