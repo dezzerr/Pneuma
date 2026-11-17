@@ -25,6 +25,7 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         vi.mocked(loadJsonBible).mockResolvedValue({ data: bible } as any)
         const detector = await BibleCacheManager.getCache("local")
         expect(detector).not.toBeNull()
+        expect(await detector!.search("the verticals chapter 5 verse 8. Leviticus chapter 1 verse 2.", "")).toMatchObject({ content: "Leviticus 1:2", confidence: 98 })
         for (const [text, reference] of [
             ["Genesis 5 Genesis 5.2", "Genesis 5:2"],
             ["Genesis 5.2 Leviticus 5x8", "Leviticus 5:8"],

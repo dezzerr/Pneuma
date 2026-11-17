@@ -490,7 +490,8 @@ export class BibleSearchDetector {
         if (this.DEBUG_MODE) console.log("[DETECTION] Mishearings corrected:", mishearingsCorrected)
         if (this.DEBUG_MODE) console.log("[DETECTION] Mishearings normalized:", mishearingsNormalized)
 
-        const refMatch = this.findReferenceMatch(mishearingsNormalized) || this.findReferenceMatch(rawNormalized) || this.findStandaloneVerseMatch(mishearingsNormalized, currentlyOutputted) || this.findStandaloneVerseMatch(rawNormalized, currentlyOutputted)
+        const literalRef = this.findReferenceMatch(rawNormalized)
+        const refMatch = this.findReferenceMatch(mishearingsNormalized) || literalRef || this.findStandaloneVerseMatch(mishearingsNormalized, currentlyOutputted) || this.findStandaloneVerseMatch(rawNormalized, currentlyOutputted)
 
         // Only offer a corrected book as a suggestion; never present a guess automatically.
         const correctedNormalized = normalizeReferences(spokenBookCorrection.text, this.cacheData)
@@ -509,7 +510,10 @@ export class BibleSearchDetector {
         }
         // A corrected reference spoken after an older exact reference must not
         // be discarded just because the old reference remains in the overlap.
-        const preferCorrection = correctedRef && (!refMatch || correctedRef.content === refMatch.content || trailingLength(correctedNormalized) < trailingLength(mishearingsNormalized))
+        // A correction to an earlier book in the overlap does not reduce the
+        // confidence of a later, fully spoken literal reference.
+        const latestIsLiteral = literalRef?.confidence === 98 && literalRef.content === correctedRef?.content && trailingLength(rawNormalized) === trailingLength(correctedNormalized)
+        const preferCorrection = correctedRef && !latestIsLiteral && (!refMatch || correctedRef.content === refMatch.content || trailingLength(correctedNormalized) < trailingLength(mishearingsNormalized))
         const baseRef = preferCorrection ? correctedRef : refMatch
         const baseText = preferCorrection ? correctedNormalized : mishearingsNormalized
         if (baseRef && this.cacheData.refRegex) {

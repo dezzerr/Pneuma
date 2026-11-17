@@ -56,11 +56,12 @@ export function correctSpokenBookReferences(text: string, books: string[] = []):
     const cue = /\b([\p{L}]+|the verticals|have a cook|have a clock|echols yest),?\s+(?:(chapter)\s+)?(\d+)(?:\s*(x|-)\s*|[,\s]+(vs\.?|this|there['’]s|verse|verses)\s+)(\d+|too)\b/giu
     const formatted = repaired.replace(cue, (match, book: string, chapterWord, chapter, symbol, cueWord, last) => {
         const key = book.toLowerCase()
-        if (!knownBooks.has(key) && !ALIASES[key]) return match
+        const alias = Object.hasOwn(ALIASES, key) ? ALIASES[key] : undefined
+        if (!knownBooks.has(key) && !alias) return match
         if (symbol === "-" && Number(last) >= Number(chapter)) return match // also a possible chapter range
         if ((cueWord === "this" || cueWord?.startsWith("there") || last === "too") && !chapterWord) return match
         const verse = last === "too" ? "2" : last
-        const replacement = ALIASES[key] || book
+        const replacement = alias || book
         if (replacement.toLowerCase() === key && cueWord === "verse" && !match.includes(",")) return match
         corrected = true
         return replacement + (chapterWord ? " chapter " : " ") + chapter + " verse " + verse
