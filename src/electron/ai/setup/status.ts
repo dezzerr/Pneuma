@@ -1,3 +1,4 @@
+import { whisperStatus } from "./models/whisper"
 import { parakeetStatus } from "../stt/models/ParakeetTranscriber"
 import type { EngineStatus } from "../../../types/ai/Ai"
 import { getLLMProvider } from "../llm/llmProviders"
@@ -13,6 +14,7 @@ export async function aiGetModelStatus(data?: { engineId?: string; modelId?: str
     const status: Record<string, EngineStatus> = {}
     const { engineId: id, modelId = "", customPath } = data || {}
 
+    if (!id || id === "whisper") status.whisper = whisperStatus()
     if (id === "parakeet") status.parakeet = parakeetStatus()
 
     if (!id || id === "nemotron") status.nemotron = await LocalModelManager.getStatus("nemotron", modelId, customPath)

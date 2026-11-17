@@ -1,3 +1,4 @@
+import { WhisperDriver } from "./whisperDriver"
 import path from "path"
 import type { DriverCallbacks, TranscriberSegment, TranscriptionDriver } from "../sttHelper"
 import { findRepeatedTail, isMusicAnnotation, segmentConfidence } from "../sttHelper"
@@ -10,8 +11,8 @@ const NEMOTRON_FILES = {
     vad: "silero_vad.onnx"
 } as const
 
-export type NemotronWorkerRequest = { type: "start"; language?: string; decodeLanguage?: string; modelDir?: string } | { type: "audio"; data: Uint8Array } | { type: "stop" }
-export type NemotronWorkerResponse = { type: "ready" } | { type: "segment"; segment: TranscriberSegment } | { type: "interim"; text: string } | { type: "error"; message: string } | { type: "stopped" } | { type: "alive" }
+export type NemotronWorkerRequest = { type: "start"; engine?: "nemotron" | "whisper"; language?: string; decodeLanguage?: string; modelDir?: string } | { type: "audio"; data: Uint8Array } | { type: "stop" }
+export type NemotronWorkerResponse = { type: "ready" } | { type: "segment"; segment: TranscriberSegment } | { type: "interim"; text: string } | { type: "error"; message: string } | { type: "stopped" } | { type: "alive" } | { type: "consumed"; bytes: number }
 
 const SAMPLE_RATE = 16000
 
@@ -271,7 +272,7 @@ export function int16ToFloat32(buffer: Uint8Array): Float32Array {
 // IPC Utility Process Worker Entrypoint
 const parentPort = (process as any).parentPort
 if (parentPort) {
-    let driver: NemotronDriver | null = null
+    let driver: TranscriptionDriver | null = null
     const post = (msg: NemotronWorkerResponse) => parentPort.postMessage(msg)
 
     setInterval(() => post({ type: "alive" }), 5000).unref?.()
@@ -279,7 +280,8 @@ if (parentPort) {
     parentPort.on("message", async ({ data }: { data: NemotronWorkerRequest }) => {
         try {
             if (data.type === "start") {
-                driver = new NemotronDriver({
+                const Driver = data.engine === "whisper" ? WhisperDriver : NemotronDriver
+                driver = new Driver({
                     language: data.language,
                     decodeLanguage: data.decodeLanguage,
                     modelDir: data.modelDir,
@@ -291,6 +293,7 @@ if (parentPort) {
                 post({ type: "ready" })
             } else if (data.type === "audio") {
                 driver?.pushAudio(data.data)
+                if (driver instanceof WhisperDriver) post({ type: "consumed", bytes: data.data.byteLength })
             } else if (data.type === "stop") {
                 await driver?.stop()
                 driver = null

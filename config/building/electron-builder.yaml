@@ -15,7 +15,11 @@ files:
     - "!**/node_modules/grandiose/ndi/**"
     - "!**/node_modules/osr-capture/**/on12_harness.exe"
 
+beforePack: scripts/prepare-whisper.cjs
+
 extraResources:
+    - from: resources/whisper-base
+      to: whisper-base
     - from: node_modules/slideshow/
       to: slideshow
       filter:

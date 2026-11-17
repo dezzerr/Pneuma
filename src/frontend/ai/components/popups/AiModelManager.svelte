@@ -33,6 +33,7 @@
     }
 
     const sttEngines = [
+        { value: "whisper", label: "Whisper Base (local)" },
         { value: "parakeet", label: "Parakeet", data: "Uses the local English model already downloaded by Hex on Apple Silicon Mac." },
         { value: "nemotron", label: "Nemotron", data: "Transcribes as you speak, so references are picked up almost immediately. Supports around 40 languages." }
         // other models in the future?

@@ -25,3 +25,7 @@ test-results/
 .serena
 # Local sermon/model validation assets (not distributed)
 /tmp/
+
+/resources/whisper-base/*.onnx
+/resources/whisper-base/base-tokens.txt
+/resources/whisper-base/*.partial

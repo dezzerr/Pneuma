@@ -65,6 +65,7 @@
 <MaterialDropdown
     label="ai.engine"
     options={[
+        { value: "whisper", label: "Whisper Base (local)" },
         { value: "parakeet", label: "Parakeet (Hex local model — Apple Silicon)" },
         { value: "nemotron", label: "Nemotron" }
     ]}

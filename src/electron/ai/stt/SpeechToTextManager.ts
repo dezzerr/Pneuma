@@ -1,12 +1,13 @@
+import { whisperStatus } from "../setup/models/whisper"
 import type { SttEngineOptions } from "../../../types/ai/AiSettings"
 import { ToMain } from "../../../types/IPC/ToMain"
 import { sendToMain } from "../../IPC/main"
 import { LocalModelManager } from "../setup/LocalModelManager"
 import { ParakeetTranscriber, parakeetStatus } from "./models/ParakeetTranscriber"
-import { NemotronTranscriber } from "./models/NemotronTranscriber"
+import { SherpaTranscriber } from "./models/SherpaTranscriber"
 import type { TranscriberSegment } from "./sttHelper"
 
-type SttEngine = NemotronTranscriber | ParakeetTranscriber
+type SttEngine = SherpaTranscriber | ParakeetTranscriber
 type SegmentListener = (segment: TranscriberSegment) => void
 
 const sanitizeError = (msg: string) => msg.replace(/\s+/g, " ").trim().slice(0, 200)
@@ -74,10 +75,10 @@ export class SpeechToText {
             if (!status.ready) return { error: status.error || "Parakeet could not be initialized" }
             return { transcriber: new ParakeetTranscriber(this.onSegment, this.onError, this.onInterim) }
         }
-        if (engine === "nemotron") {
-            const status = await LocalModelManager.getStatus("nemotron")
+        if (engine === "nemotron" || engine === "whisper") {
+            const status = engine === "whisper" ? whisperStatus() : await LocalModelManager.getStatus("nemotron")
             if (!status.ready) return { error: status.error || "Nemotron could not be initialized" }
-            return { transcriber: new NemotronTranscriber({ ...options }, this.onSegment, this.onError, this.onInterim) }
+            return { transcriber: new SherpaTranscriber(engine, { ...options }, this.onSegment, this.onError, this.onInterim) }
         }
 
         console.error(`Unknown STT engine: ${engine}`)
