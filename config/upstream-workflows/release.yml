@@ -1,0 +1,143 @@
+name: Release
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  publish_windows:
+    name: "Publish Windows"
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and release app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: npm run release
+
+  publish_linux:
+    name: "Publish Linux x64"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install libraries
+        run:
+          |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev uuid-dev libltc-dev libegl1-mesa-dev libgles2-mesa-dev --fix-missing
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and release app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release
+
+  # This needs it's own build
+  # https://github.com/ChurchApps/FreeShow/issues/562
+  publish_linux_arm:
+    name: "Publish Linux arm64"
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install libraries
+        run:
+          |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev uuid-dev libltc-dev libegl1-mesa-dev libgles2-mesa-dev --fix-missing
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install FPM
+        run:
+          |
+          sudo apt-get install ruby ruby-dev build-essential
+          sudo gem install --no-document fpm
+
+      # wait because this will only publish if the draft exists
+      - name: Sleep for 1.5 minute
+        run: sleep 90s
+        shell: bash
+
+      - name: Build and release app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_SYSTEM_FPM: true
+        run: npm run release
+
+  publish_mac:
+    name: "Publish MacOS"
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Change Python version: https://github.com/nodejs/node-gyp/issues/2869
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # This probably does not make any difference.
+      - name: Install node-gyp
+        run: npm install -g node-gyp
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install dmg-license
+        run: npm i dmg-license
+
+      # for some reason the build command don't continue after the rollup build
+      - name: Sleep for 3 minutes
+        run: sleep 180
+        shell: bash
+
+      - name: Build and release app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLEID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLEIDPASS }}
+          APPLE_TEAM_ID: ${{ secrets.APPLETEAMID }}
+        run: npm run release

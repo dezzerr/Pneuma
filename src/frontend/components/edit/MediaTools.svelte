@@ -1,0 +1,138 @@
+<script lang="ts">
+    import type { TabsObj } from "../../../types/Tabs"
+    import { activeEdit, activeShow, media, outputs } from "../../stores"
+    import { clone } from "../helpers/array"
+    import { getExtension, getMediaType } from "../helpers/media"
+    import { setOutput } from "../helpers/output"
+    import { removeStore, updateStore } from "../helpers/update"
+    import FloatingInputs from "../input/FloatingInputs.svelte"
+    import MaterialButton from "../inputs/MaterialButton.svelte"
+    import Tabs from "../main/Tabs.svelte"
+    import { VideoPlayer } from "../media/video/videoPlayer"
+    import { addFilterString } from "./scripts/textStyle"
+    import EditValues from "./tools/EditValues.svelte"
+    import { setBoxInputValue } from "./values/boxes"
+    import { filterSections, mediaBoxes } from "./values/media"
+
+    let tabs: TabsObj = {
+        media: { name: "items.media", icon: "image" },
+        filters: { name: "edit.filters", icon: "filter" }
+        // options: { name: "", icon: "options" },
+    }
+    let active: string = Object.keys(tabs)[0]
+
+    // update values
+    $: mediaId = $activeEdit.id || $activeShow!.id
+    $: currentMedia = $media[mediaId] || {}
+
+    $: mediaType = $activeEdit.type === "camera" ? "camera" : getMediaType(getExtension(mediaId))
+
+    $: mediaSections = clone(mediaBoxes[mediaType]?.sections || {})
+
+    $: isVideo = mediaType === "video"
+    $: if (mediaId && isVideo) getVideoDuration()
+    function getVideoDuration() {
+        VideoPlayer.getDuration(mediaId).then(loaded)
+
+        function loaded(videoDuration: number) {
+            if (!videoDuration) return
+
+            const maxSoftLoop = Math.floor(videoDuration / 2)
+
+            setBoxInputValue(mediaSections, "video", "toTime", "value", currentMedia?.toTime || videoDuration)
+            setBoxInputValue(mediaSections, "video", "toTime", "default", videoDuration)
+            setBoxInputValue(mediaSections, "video", "fromTime", "values", { max: videoDuration })
+            setBoxInputValue(mediaSections, "video", "toTime", "values", { max: videoDuration })
+            setBoxInputValue(mediaSections, "video", "softLoop", "values", { max: Math.min(50, maxSoftLoop), sliderValues: { max: Math.min(10, maxSoftLoop), step: 0.5 } })
+            mediaSections = mediaSections
+        }
+    }
+
+    function updateMatchingOutputs(modifyFunction: (bg: any) => void) {
+        Object.entries($outputs).forEach(([outId, out]) => {
+            const bg = out?.out?.background
+            if ((bg?.path || bg?.id) !== mediaId) return
+
+            const newBg = clone(bg)
+            modifyFunction(newBg)
+            setOutput("background", newBg, false, outId)
+        })
+    }
+
+    function reset() {
+        let deleteKeys: string[] = ["flipped", "flippedY", "blend", "fit", "speed", "volume", "fromTime", "toTime", "videoType", "cropping"]
+
+        // reset
+        if (active === "filters") deleteKeys = ["filter"]
+        else if (active !== "media") return
+        deleteKeys.forEach((key) => removeStore("media", { keys: [mediaId, key] }))
+
+        updateMatchingOutputs((bg) => deleteKeys.forEach((key) => delete bg[key]))
+
+        mediaSections = clone(mediaBoxes[mediaType]?.sections || {})
+    }
+
+    export function valueChanged(input: any) {
+        if (!mediaId) return
+
+        let value = input.value?.id !== undefined ? input.value.id : input.value
+        if (input.id === "filter") value = addFilterString(currentMedia?.filter || "", [input.key, value])
+
+        updateStore("media", { keys: [mediaId, ...input.id.split(".")], value })
+
+        VideoPlayer.updateProperties(mediaId)
+
+        // update output filters / cropping
+        updateMatchingOutputs((bg) => {
+            const parts = input.id.split(".")
+            if (parts.length > 1) {
+                if (typeof bg[parts[0]] !== "object" || bg[parts[0]] === null) bg[parts[0]] = {}
+                bg[parts[0]][parts[1]] = value
+            } else {
+                bg[input.id] = value
+            }
+        })
+    }
+
+    function valueChanged2(e: any) {
+        const input = e.detail
+
+        input.value = input.values.value
+        input.input = input.type
+
+        valueChanged(input)
+    }
+</script>
+
+<div class="main border editTools">
+    <Tabs {tabs} bind:active />
+
+    <div class="content">
+        {#if active === "media"}
+            <EditValues sections={mediaSections} item={currentMedia} on:change={valueChanged2} />
+        {:else if active === "filters"}
+            <EditValues sections={clone(filterSections)} item={currentMedia} on:change={valueChanged2} />
+        {/if}
+    </div>
+
+    <FloatingInputs>
+        <MaterialButton icon="reset" title="actions.reset" on:click={reset} />
+    </FloatingInputs>
+</div>
+
+<style>
+    .main {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .content {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        padding-bottom: 50px;
+    }
+</style>
