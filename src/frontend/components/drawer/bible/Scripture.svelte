@@ -164,6 +164,8 @@
     }
 
     $: isActiveInOutput = outputIsScripture($outputs)
+    let browsingChapter = false
+    $: singleClickPresents = isActiveInOutput && !browsingChapter
 
     type Reference = {
         book: number | string | null
@@ -403,17 +405,18 @@
         const currentData = data[previewBibleId]?.chapterData
         if (!currentData) return
 
-        // load new data
-        try {
-            data[previewBibleId].verseData = currentData.getVerses(verseNumbers.map(Number))
-        } catch {
-            // failed to load
-            return
+        if (verseNumbers[0]?.length) {
+            try {
+                data[previewBibleId].verseData = currentData.getVerses(verseNumbers.map(Number))
+            } catch {
+                return
+            }
+        } else {
+            delete data[previewBibleId].verseData
+            playWhenLoaded = false
         }
 
-        // newToast(translateText("toast.verse_undefined").replace("{}", verse))
-
-        if (activeReference.verses[0]?.length && activeReference.book !== null) {
+        if (activeReference.book !== null) {
             activeScripture.set({
                 id: previewBibleId,
                 reference: {
@@ -451,6 +454,8 @@
         }
 
         resetContentSearch()
+        historyOpened = false
+        browsingChapter = Boolean(request.chapterOnly)
 
         if (request.play && !request.onPresentationComplete) playWhenLoaded = true
 
@@ -1022,7 +1027,7 @@
         const book = data[previewBibleId]?.bookData?.name || ""
         const referenceDivider = $scriptureSettings.referenceDivider || ":"
         const range = joinRange(sortScriptureSelection(activeReference.verses[0] || []))
-        const reference = `${book} ${activeReference.chapters}${referenceDivider}${range}`
+        const reference = `${book} ${activeReference.chapters}${range ? referenceDivider + range : ""}`
         return reference
     }
 
@@ -1180,8 +1185,8 @@
                                     draggable="true"
                                     on:mousedown={(e) => openVerse(updateVersesSelection(e, content.id))}
                                     on:click={(e) => openVerse(updateVersesSelection(e, content.id, true))}
-                                    on:click={(e) => (isActiveInOutput && !e.ctrlKey && !e.metaKey ? playScripture() : false)}
-                                    on:dblclick={(e) => (isActiveInOutput && !e.ctrlKey && !e.metaKey ? false : playScripture())}
+                                    on:click={(e) => (singleClickPresents && !e.ctrlKey && !e.metaKey ? playScripture() : false)}
+                                    on:dblclick={(e) => (singleClickPresents && !e.ctrlKey && !e.metaKey ? false : playScripture())}
                                     role="none"
                                 >
                                     <span class="v" style={endNumber && subverse && showSuffixInPicker ? "width: 60px;" : ""}
@@ -1285,7 +1290,7 @@
             </MaterialButton>
         {/if}
 
-        <MaterialButton disabled={$outLocked} title={isActiveInOutput ? "preview._update [Ctrl+R]" : "menu._title_display"} on:click={playScripture}>
+        <MaterialButton disabled={$outLocked || !activeReference.verses[0]?.length} title={isActiveInOutput ? "preview._update [Ctrl+R]" : "menu._title_display"} on:click={playScripture}>
             <Icon size={isActiveInOutput ? 1.1 : 1.3} id={isActiveInOutput ? "refresh" : "play"} white={!isActiveInOutput} />
         </MaterialButton>
 

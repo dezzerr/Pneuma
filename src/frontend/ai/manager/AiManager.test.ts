@@ -56,6 +56,18 @@ describe("Pneuma operator-approved scripture", () => {
         expect(get(aiSuggestions)[0].action).toBe("present")
     })
 
+    it("opens the suggested chapter for individual verse selection", async () => {
+        ai.set({ scripture: { confidence: "highest" } })
+        AiManager.newMatch({ type: "scripture", content: "Matthew 3", confidence: 98, scriptureMatchType: "chapter", scriptureTranslation: "local-bible" })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(startScripture).not.toHaveBeenCalled()
+        const suggestion = get(aiSuggestions)[0]
+        expect(suggestion.action).toBe("open_chapter")
+        suggestion.trigger?.()
+        expect(startScripture).toHaveBeenCalledWith({ id: "local-bible", reference: "Matthew 3", play: false, chapterOnly: true })
+        expect(AiManager.liveContent).toBe("")
+    })
+
     it("offers both books for an unqualified numbered reference without auto-presenting", async () => {
         ai.set({ scripture: { confidence: "highest" } })
         for (const content of ["1 Timothy 1:1", "2 Timothy 1:1"]) AiManager.newMatch({ type: "scripture", content, confidence: 50, scriptureTranslation: "local-bible" })

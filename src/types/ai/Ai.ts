@@ -12,7 +12,7 @@ export interface MatchResult {
     content: string // "scripture" = reference (e.g., "Genesis 1:1")
     confidence: number // 1-100
 
-    scriptureMatchType?: "content"
+    scriptureMatchType?: "content" | "chapter"
     scriptureTranslation?: string
     scriptureIsNewTranslation?: boolean
 }

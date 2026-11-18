@@ -250,7 +250,7 @@
                 </div>
 
                 {#if activeTab === "transcription"}
-                    <AiTranscription {state} />
+                    <AiTranscription {state} closePanel={() => (isOpen = false)} />
                 {:else if activeTab === "chat"}
                     <AiChat />
                 {/if}

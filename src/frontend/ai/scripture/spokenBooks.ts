@@ -1,6 +1,7 @@
 // Conservative recognition aliases, applied only immediately before an explicit
 // chapter-and-verse cue. A corrected guess must always be approved by an operator.
 const ALIASES: Record<string, string> = {
+    nehemi: "Nehemiah",
     trinomy: "Deuteronomy",
     habacle: "Habakkuk",
     "the verticals": "Leviticus",
@@ -44,9 +45,13 @@ const aliasPattern = Object.keys(ALIASES).join("|")
 
 export function correctSpokenBookReferences(text: string, books: string[] = []): { text: string; corrected: boolean } {
     let corrected = false
+    const nahum = text.replace(/\bnahum,?\s+(?:to|2)(?:\s+you)?,?\s+this\s+(\d+)\b/giu, (_match, verse) => {
+        corrected = true
+        return `Nahum 2 verse ${verse}`
+    })
     // The speech engine sometimes splits "verse" into "of S". Restrict this
     // correction to a complete reference and keep it operator-approved.
-    const repaired = text.replace(/\b(revelations?)\s+(\d+)\s+of\s+s\s+(\d+)\b/giu, (_match, book, chapter, verse) => {
+    const repaired = nahum.replace(/\b(revelations?)\s+(\d+)\s+of\s+s\s+(\d+)\b/giu, (_match, book, chapter, verse) => {
         corrected = true
         return `${book} ${chapter} verse ${verse}`
     })

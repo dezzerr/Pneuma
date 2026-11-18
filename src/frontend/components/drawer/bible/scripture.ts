@@ -2207,7 +2207,7 @@ function buildRouteBibleUrl(referenceLabel: string, translation = "") {
 }
 
 // convert text reference (e.g., "John 3:16") to actual reference (e.g., { book: "John", chapter: 3, verses: [16] })
-export async function resolveScriptureReference(referenceText: string, scriptureId = "") {
+export async function resolveScriptureReference(referenceText: string, scriptureId = "", chapterOnly = false) {
     if (typeof referenceText !== "string" || !referenceText.trim()) return null
 
     const id = scriptureId || get(drawerTabsData).scripture?.activeSubTab || ""
@@ -2225,6 +2225,7 @@ export async function resolveScriptureReference(referenceText: string, scripture
 
         const book = bookResult.book
         const chapter = bookResult.chapter ? Number(bookResult.chapter) : 1
+        if (chapterOnly) return { id, book, chapter, verses: [] }
         let verses = bookResult.verses || []
         if (bookResult.chapter && !verses.length) {
             const verseMatch = referenceText.match(/[:.,]\s*(\d+)(?:-(\d+))?[^a-zA-Z]*$/)

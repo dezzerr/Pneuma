@@ -10,42 +10,64 @@ export class BibleSearchDetector {
     constructor(private cacheData: BibleCacheData) {}
 
     public findReferenceMatch(cleanInput: string): MatchResult | null {
-        return Array.from(this.referenceMatches(cleanInput, true)).at(-1) || null
+        return Array.from(this.referenceMatches(cleanInput, false)).at(-1) || null
     }
 
-    // Final transcript text may contain several complete references. Keep
-    // them in speech order, and skip passages already complete in the overlap.
+    // Match each completed reference in a phrase, including recoverable
+    // mishearings, and leave passages already complete in the overlap alone.
     public findFinalReferences(text: string, overlap: string): MatchResult[] {
-        const normalize = (value: string) => normalizeReferences(normalizeNumbers(value), this.cacheData)
-        const previous = Array.from(this.referenceMatches(normalize(overlap), false))
-        const current = Array.from(this.referenceMatches(normalize(text), false))
-        let repeated = 0
-        while (repeated < previous.length && previous[repeated].content === current[repeated]?.content) repeated++
-        return current.slice(repeated)
+        const collect = (value: string) => {
+            const numbers = normalizeNumbers(value)
+            const literal = Array.from(this.referenceMatches(normalizeReferences(numbers, this.cacheData), true))
+            const correction = correctSpokenBookReferences(numbers, this.cacheData.bookNames)
+            const guessed = correction.corrected
+                ? Array.from(this.referenceMatches(normalizeReferences(correction.text, this.cacheData), true)).filter(
+                    (match) => match.scriptureMatchType !== "chapter" && !literal.some((exact) => exact.content === match.content)
+                )
+                : []
+            return [...literal, ...guessed.map((match) => ({ ...match, confidence: 50 }))]
+        }
+
+        const previous = collect(overlap)
+        const current = collect(text)
+        // A partial reference in the overlap can become a verse, so only
+        // remove references that were already present with the same content.
+        for (const match of previous) {
+            const index = current.findIndex((item) => item.content === match.content && item.confidence === match.confidence)
+            if (index !== -1) current.splice(index, 1)
+        }
+        return current
     }
 
-    private *referenceMatches(cleanInput: string, includeChapterOnly: boolean): Generator<MatchResult> {
+    private *referenceMatches(cleanInput: string, finalized: boolean): Generator<MatchResult> {
         if (!this.cacheData.refRegex) return
         const regex = new RegExp(this.cacheData.refRegex.source, "giu")
+        const incompleteVerse = new RegExp(`^[\\s,.;]*(?::|[x–—-]\\s*\\d|(?:${VERSE_PATTERN}|vs|chapter)\\b|(?:you\\s+)?this\\s+\\d)`, "iu")
         for (const refMatch of cleanInput.matchAll(regex)) {
-            if (includeChapterOnly && cleanInput.length - (refMatch.index + refMatch[0].length) > 120) continue
+            const endIndex = refMatch.index + refMatch[0].length
+            if (!finalized && cleanInput.length - endIndex > 120) continue
             const book = normalizeBookName(refMatch[1]).toLowerCase().replace(/\s+/g, " ")
             const chapter = Number(refMatch[2])
             const start = Number(refMatch[3])
             const end = Number(refMatch[4])
-            const variants = includeChapterOnly ? undefined : this.cacheData.ambiguousBooks?.get(book)
+            const variants = finalized ? this.cacheData.ambiguousBooks?.get(book) : undefined
             for (const name of variants || [book]) {
                 const chapterData = this.cacheData.referenceIndex.get(`${name} ${chapter}`)
                 if (!chapterData?.verseCount) continue
 
+                const reference = `${chapterData.bookName} ${chapterData.chapterNumber}`
                 if (!refMatch[3]) {
-                    if (includeChapterOnly) yield { type: "scripture", content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`, confidence: 50 }
+                    if (!finalized) {
+                        // Keep chapter context available to the standalone verse matcher.
+                        yield { type: "scripture", content: `${reference}:1`, confidence: 50 }
+                    } else if (!incompleteVerse.test(cleanInput.slice(endIndex))) {
+                        yield { type: "scripture", content: reference, confidence: variants ? 50 : 98, scriptureMatchType: "chapter" }
+                    }
                     continue
                 }
                 if (start < 1 || start > chapterData.verseCount || (end && end > chapterData.verseCount)) continue
 
-                const reference = `${chapterData.bookName} ${chapterData.chapterNumber}:${start}`
-                yield { type: "scripture", content: end > start ? `${reference}-${end}` : reference, confidence: variants ? 50 : 98 }
+                yield { type: "scripture", content: end > start ? `${reference}:${start}-${end}` : `${reference}:${start}`, confidence: variants ? 50 : 98 }
             }
         }
     }

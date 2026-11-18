@@ -1826,6 +1826,7 @@
         "processing": "Processing...",
         "transcription": "Transcription",
         "auto_present": "Auto present",
+        "open_chapter": "Open chapter",
         "confidence_ask": "Always ask",
         "confidence_highest": "If confident",
         "confidence_high": "If high confidence",

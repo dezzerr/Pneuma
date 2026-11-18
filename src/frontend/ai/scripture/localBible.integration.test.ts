@@ -25,6 +25,19 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         vi.mocked(loadJsonBible).mockResolvedValue({ data: bible } as any)
         const detector = await BibleCacheManager.getCache("local")
         expect(detector).not.toBeNull()
+        expect(detector!.findFinalReferences("Matthew 3 James chapter one Romans 1 verse 3-5", "")).toEqual([
+            { type: "scripture", content: "Matthew 3", confidence: 98, scriptureMatchType: "chapter" },
+            { type: "scripture", content: "James 1", confidence: 98, scriptureMatchType: "chapter" },
+            { type: "scripture", content: "Romans 1:3-5", confidence: 98 }
+        ])
+        expect(detector!.findFinalReferences("Matthew 3 Second Thessalonians chapter 1 verse 2", "").map((match) => match.content)).toEqual(["Matthew 3", "2 Thessalonians 1:2"])
+        expect(detector!.findFinalReferences("Matthew chapter 3 verse", "")).toEqual([])
+        expect(detector!.findFinalReferences("Matthew chapter 35", "")).toEqual([])
+        expect(detector!.findFinalReferences("Matthew 3. Nahum to this one. Nahum to you this one. Nehemi chapter 2 verse 1", "Matthew 3.")).toEqual([
+            { type: "scripture", content: "Nahum 2:1", confidence: 50 },
+            { type: "scripture", content: "Nahum 2:1", confidence: 50 },
+            { type: "scripture", content: "Nehemiah 2:1", confidence: 50 }
+        ])
         expect(detector!.findFinalReferences("Zephaniah 1 verse 1 Zechariah chapter 1 verse 1 Philippians 2 verse 1 Philemon 1 verse 2 second Thessalonians 1 verse 2 Obadiah 1 verse 1 Ezekiel 1 verse 2", "").map((match) => match.content)).toEqual([
             "Zephaniah 1:1", "Zechariah 1:1", "Philippians 2:1", "Philemon 1:2", "2 Thessalonians 1:2", "Obadiah 1:1", "Ezekiel 1:2"
         ])

@@ -29,8 +29,9 @@
             style="padding: 0;border-radius: 50px;"
             on:click={() => {
                 if (smartAction?.trigger) {
-                    smartAction.trigger()
-                    setTimeout(() => aiSmartAction.set(null), 500)
+                    const { id, trigger } = smartAction
+                    trigger()
+                    setTimeout(() => aiSmartAction.update((current) => (current?.id === id ? null : current)), 500)
                 } else {
                     aiSmartAction.set(null)
                 }
@@ -54,10 +55,10 @@
                                 <span class="translation">({getShortBibleName($scriptures[smartAction.scriptureTranslation]?.name)})</span>
                             {/if}
                         </span>
-                    {:else if smartAction?.action === "open_scripture"}
+                    {:else if smartAction?.action === "open_scripture" || smartAction?.action === "open_chapter"}
                         <Icon id="scripture" white />
 
-                        <p>{translateText("main.open")}:</p>
+                        <p>{translateText(smartAction.action === "open_chapter" ? "ai.open_chapter" : "main.open")}:</p>
                         <span style="font-weight: bold;">
                             {smartAction.content}
                         </span>

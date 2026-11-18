@@ -32,14 +32,16 @@
 
     $: activeScriptureId = $drawerTabsData.scripture?.activeSubTab || ""
 
+    let scriptureLoad = 0
     $: if (activeScriptureId || $activeScripture.reference) loadScriptureData()
     async function loadScriptureData() {
+        const request = ++scriptureLoad
         const content = await getActiveScripturesContent()
-        if (content?.length) {
-            biblesContent = content
-            selectedChapters = biblesContent[0]?.chapters || []
-            selectedVerses = biblesContent[0]?.activeVerses || []
-        }
+        if (request !== scriptureLoad) return
+
+        biblesContent = content || []
+        selectedChapters = biblesContent[0]?.chapters || []
+        selectedVerses = biblesContent[0]?.activeVerses || []
     }
 
     let slides: Item[][] = [[]]
@@ -64,11 +66,14 @@
     }
 
     $: {
-        if (selectedVerses.length || $scriptureSettings) getSlides({ biblesContent, selectedChapters, selectedVerses })
+        if (selectedVerses[0]?.length) getSlides({ biblesContent, selectedChapters, selectedVerses, settings: $scriptureSettings })
         else slides = [[]]
     }
+    let slideLoad = 0
     async function getSlides(data: any) {
-        slides = (await getScriptureSlidesNew(data, true)).slides
+        const request = ++slideLoad
+        const result = await getScriptureSlidesNew(data, true)
+        if (request === slideLoad && data.selectedVerses === selectedVerses) slides = result.slides
     }
 
     $: showVersion = biblesContent.find((a) => a?.attributionRequired) || $scriptureSettings.showVersion

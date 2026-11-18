@@ -713,7 +713,7 @@ export async function startScripture(data: API_scripture, onPresentationComplete
         ref = { book, chapter, verses: [verseItems.length ? verseItems : [rawVerses]] }
     } else {
         // convert text reference to actual reference
-        let resolved = await resolveScriptureReference(data.reference, data.id)
+        let resolved = await resolveScriptureReference(data.reference, data.id, data.chapterOnly)
         if (!resolved) {
             resolved = parseEngScriptureRefToNumbers(data.reference)
             if (!resolved) {
@@ -729,7 +729,7 @@ export async function startScripture(data: API_scripture, onPresentationComplete
     if (data.id) setDrawerTabData("scripture", data.id) // use active if no ID
     activeDrawerTab.set("scripture")
 
-    openScripture.set({ ...ref, play: data.play !== false, onPresentationComplete })
+    openScripture.set({ ...ref, verses: data.chapterOnly ? [[]] : ref.verses, play: !data.chapterOnly && data.play !== false, chapterOnly: data.chapterOnly, onPresentationComplete })
 }
 
 // MEDIA

@@ -255,13 +255,17 @@ export class BibleCacheManager {
             if (variants.length < 2) ambiguousBooks.delete(book)
             else variants.sort()
         }
-        const bookPattern = [...canonicalNames, ...ambiguousBooks.keys()]
+        const bookAlternation = (names: string[]) => names
             .sort((a, b) => b.length - a.length)
             .map((book) => book.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"))
             .join("|")
-        // Only numbered books can start with a digit. An optional prefix
-        // can consume an earlier verse number and hide the next book.
-        const refRegex = new RegExp(`\\b(${bookPattern})\\b,?\\s*(?:${CHAPTER_PATTERN})?\\s*(\\d+)(?:[\\s,:.]+(?:${VERSE_PATTERN})?\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?)?`, "iu")
+        const bookPattern = bookAlternation([...canonicalNames, ...ambiguousBooks.keys()])
+        const numberedBooks = bookAlternation([...canonicalNames].filter((name) => /^[1-3]\s/.test(name)))
+        // Whitespace before a numbered book can end a chapter reference,
+        // while an explicit colon or verse cue still takes its own number.
+        const nextBook = numberedBooks ? `(?!\\s*(?:${numberedBooks})\\b,?\\s+(?:${CHAPTER_PATTERN}\\s+)?\\d)` : ""
+        const beforeVerse = `(?:[\\s,:.]+(?:${VERSE_PATTERN})\\s*|\\s*:\\s*|[\\s,.]+${nextBook})`
+        const refRegex = new RegExp(`\\b(${bookPattern})\\b,?\\s*(?:${CHAPTER_PATTERN})?\\s*(\\d+)(?:${beforeVerse}(\\d+)(?:\\s*[-–—]\\s*(\\d+))?)?`, "iu")
 
         return {
             versePool,

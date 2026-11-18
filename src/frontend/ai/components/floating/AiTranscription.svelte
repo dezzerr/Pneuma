@@ -11,6 +11,7 @@
     import { bibleIndexStatus } from "../../scripture/BibleCacheManager"
     import ConfidenceMeter from "./ConfidenceMeter.svelte"
 
+    export let closePanel: () => void
     export let state: "loading" | "inactive" | "error" | "listening" | "processing" = "inactive"
 
     // the transcript follows the speech while pinned to the bottom - scrolling up to read
@@ -127,8 +128,11 @@
 
                     {#if suggestion.action === "presented"}
                         <MaterialButton icon="check" title="ai.auto_present" style="padding: 6px;" disabled />
-                    {:else if suggestion.action === "open_scripture"}
-                        <MaterialButton icon="scripture" title="main.open" style="padding: 6px;" on:click={() => suggestion.trigger?.()} />
+                    {:else if suggestion.action === "open_scripture" || suggestion.action === "open_chapter"}
+                        <MaterialButton icon="scripture" title={suggestion.action === "open_chapter" ? "ai.open_chapter" : "main.open"} style="padding: 6px;" on:click={() => {
+                            suggestion.trigger?.()
+                            if (suggestion.action === "open_chapter") closePanel()
+                        }} />
                     {:else if suggestion.trigger}
                         <MaterialButton
                             icon="play"

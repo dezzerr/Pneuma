@@ -33,7 +33,7 @@ export class AiManager {
         if (isCancelled()) return
         // Keep follow-on verses and phonetic suggestions after a complete
         // reference. A content match inferred from the same words is redundant.
-        if (references.length && (!stringMatch || stringMatch.scriptureMatchType === "content" || references.some((match) => match.content === stringMatch.content))) return
+        if (references.length && (!stringMatch || stringMatch.scriptureMatchType === "content" || references.some((match) => match.content === stringMatch.content || (match.scriptureMatchType === "chapter" && stringMatch.confidence <= 50 && stringMatch.content === `${match.content}:1`)))) return
         if (stringMatch) {
             this.newMatch(stringMatch)
             this.lastMatch = Date.now()
@@ -155,7 +155,7 @@ export class AiManager {
         suggestionDraft.scriptureTranslation = match.scriptureTranslation
 
         const trigger = () => this.triggerMatchAction(match)
-        const action = match.type === "scripture_version" ? "open_scripture" : "present"
+        const action = match.type === "scripture_version" ? "open_scripture" : match.scriptureMatchType === "chapter" ? "open_chapter" : "present"
         const suggestion = { ...suggestionDraft, action, trigger }
         const key = JSON.stringify([match.scriptureTranslation, match.content])
         if (this.pendingPresentations.has(key)) return
@@ -198,7 +198,7 @@ export class AiManager {
         if (match.type === "scripture_version") return false
         if (match.type !== "scripture") return false // WIP currently only auto-plays scripture matches
 
-        if (match.type === "scripture" && match.scriptureIsNewTranslation) return false
+        if (match.scriptureMatchType === "chapter" || match.scriptureIsNewTranslation) return false
 
         // never auto-play low confidence matches
         if (match.confidence <= 50) return false
@@ -229,6 +229,14 @@ export class AiManager {
             return false
         }
         if (match.type !== "scripture") return false
+        if (match.scriptureMatchType === "chapter") {
+            try {
+                await startScripture({ id: match.scriptureTranslation, reference: match.content, play: false, chapterOnly: true })
+            } catch (error) {
+                console.error("Could not open detected chapter:", error)
+            }
+            return false
+        }
 
         return new Promise<boolean>((resolve) => {
             const timeout = setTimeout(() => resolve(false), 5000)
