@@ -3,7 +3,7 @@ import { get, writable } from "svelte/store"
 import { loadJsonBible } from "../../components/drawer/bible/scripture"
 import { scriptures } from "../../stores"
 import { BibleSearchDetector } from "./BibleSearchDetector"
-import { CHAPTER_PATTERN, ORDINAL_PREFIX_PATTERN, VERSE_PATTERN } from "./referenceDictionary"
+import { CHAPTER_PATTERN, VERSE_PATTERN } from "./referenceDictionary"
 
 export interface BibleCacheData {
     versePool: string[]
@@ -17,6 +17,7 @@ export interface BibleCacheData {
     verseTokensOffsets: Uint32Array
     verseTokens: Uint32Array
     bookNames: string[]
+    ambiguousBooks?: Map<string, string[]>
     refRegex: RegExp | null
     totalVerses: number
 }
@@ -241,8 +242,26 @@ export class BibleCacheManager {
             }
         }
 
-        const bookPattern = bookNames.map((b) => b.replace(/\s+/g, "\\s+")).join("|")
-        const refRegex = new RegExp(`\\b((?:(?:[1-3]|${ORDINAL_PREFIX_PATTERN})\\s+)?(?:${bookPattern}))\\b,?\\s*(?:${CHAPTER_PATTERN})?\\s*(\\d+)(?:[\\s,:.]+(?:${VERSE_PATTERN})?\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?)?`, "iu")
+        const ambiguousBooks = new Map<string, string[]>()
+        const canonicalNames = new Set(bookNames.map((book) => book.toLowerCase()))
+        for (const book of canonicalNames) {
+            const base = book.match(/^[1-3]\s+(.+)$/)?.[1]
+            if (!base || canonicalNames.has(base)) continue
+            const variants = ambiguousBooks.get(base) || []
+            variants.push(book)
+            ambiguousBooks.set(base, variants)
+        }
+        for (const [book, variants] of ambiguousBooks) {
+            if (variants.length < 2) ambiguousBooks.delete(book)
+            else variants.sort()
+        }
+        const bookPattern = [...canonicalNames, ...ambiguousBooks.keys()]
+            .sort((a, b) => b.length - a.length)
+            .map((book) => book.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"))
+            .join("|")
+        // Only numbered books can start with a digit. An optional prefix
+        // can consume an earlier verse number and hide the next book.
+        const refRegex = new RegExp(`\\b(${bookPattern})\\b,?\\s*(?:${CHAPTER_PATTERN})?\\s*(\\d+)(?:[\\s,:.]+(?:${VERSE_PATTERN})?\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?)?`, "iu")
 
         return {
             versePool,
@@ -256,6 +275,7 @@ export class BibleCacheManager {
             verseTokensOffsets,
             verseTokens,
             bookNames,
+            ambiguousBooks,
             refRegex,
             totalVerses
         }

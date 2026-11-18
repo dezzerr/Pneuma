@@ -36,18 +36,34 @@ describe("Pneuma operator-approved scripture", () => {
         suggestion.trigger?.()
         expect(startScripture).toHaveBeenCalledWith({ id: "local-bible", reference: "John 3:16" }, expect.any(Function))
     })
-    it("keeps the Present button until the output accepts the detected verse", () => {
+    it("waits for output confirmation before advancing to the next automatic verse", async () => {
         ai.set({ scripture: { confidence: "highest" } })
         AiManager.newMatch({ type: "scripture", content: "John 3:16", confidence: 98, scriptureTranslation: "local-bible" })
-        expect(startScripture).toHaveBeenCalledTimes(1)
-        expect(get(aiSuggestions)[0].action).toBe("present")
-        expect(AiManager.liveContent).toBe("")
-        vi.mocked(startScripture).mock.calls[0][1]?.()
-        expect(get(aiSuggestions)[0].action).toBe("presented")
-        expect(AiManager.liveContent).toBe("John 3:16")
         AiManager.newMatch({ type: "scripture", content: "John 3:17", confidence: 98, scriptureTranslation: "local-bible" })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(startScripture).toHaveBeenCalledTimes(1)
+        expect(get(aiSuggestions).map((item) => item.action)).toEqual(["present", "present"])
+        expect(AiManager.liveContent).toBe("")
+
+        vi.mocked(startScripture).mock.calls[0][1]?.(true)
+        await vi.advanceTimersByTimeAsync(0)
         expect(startScripture).toHaveBeenCalledTimes(2)
+        expect(get(aiSuggestions).map((item) => item.action)).toEqual(["present", "presented"])
+        expect(AiManager.liveContent).toBe("John 3:16")
+
+        vi.mocked(startScripture).mock.calls[1][1]?.(false)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(get(aiSuggestions)[0].action).toBe("present")
     })
+
+    it("offers both books for an unqualified numbered reference without auto-presenting", async () => {
+        ai.set({ scripture: { confidence: "highest" } })
+        for (const content of ["1 Timothy 1:1", "2 Timothy 1:1"]) AiManager.newMatch({ type: "scripture", content, confidence: 50, scriptureTranslation: "local-bible" })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(get(aiSuggestions).map((item) => item.content)).toEqual(["2 Timothy 1:1", "1 Timothy 1:1"])
+        expect(startScripture).not.toHaveBeenCalled()
+    })
+
     it("does not offer an empty detection", () => {
         AiManager.newMatch({ type: "empty", content: "", confidence: 0 })
         expect(get(aiSuggestions)).toEqual([])

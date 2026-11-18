@@ -696,7 +696,7 @@ export function getClearedState() {
 
 // "1.1.1,2,3" = "Gen 1:1-3"
 // or "John 3:16" / "1 John 1:4-6"
-export async function startScripture(data: API_scripture, onPresented?: () => void) {
+export async function startScripture(data: API_scripture, onPresentationComplete?: (presented: boolean) => void) {
     const split = data.reference.split(".")
     const book = Number(split[0])
     const chapter = Number(split[1])
@@ -716,7 +716,10 @@ export async function startScripture(data: API_scripture, onPresented?: () => vo
         let resolved = await resolveScriptureReference(data.reference, data.id)
         if (!resolved) {
             resolved = parseEngScriptureRefToNumbers(data.reference)
-            if (!resolved) return
+            if (!resolved) {
+                onPresentationComplete?.(false)
+                return
+            }
         }
 
         ref = { book: resolved.book, chapter: resolved.chapter, verses: [resolved.verses] }
@@ -726,7 +729,7 @@ export async function startScripture(data: API_scripture, onPresented?: () => vo
     if (data.id) setDrawerTabData("scripture", data.id) // use active if no ID
     activeDrawerTab.set("scripture")
 
-    openScripture.set({ ...ref, play: data.play !== false, onPresented })
+    openScripture.set({ ...ref, play: data.play !== false, onPresentationComplete })
 }
 
 // MEDIA

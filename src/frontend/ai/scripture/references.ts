@@ -36,7 +36,7 @@ export function normalizeReferences(text: string, cacheData: BibleCacheData): st
     normalized = normalized.replace(ordinalPsalmRegex, "$2 $1")
 
     // 7. Single-chapter book handler: convert "Philemon verse 6" -> "Philemon 1:6"
-    const singleChapterRegex = new RegExp(`\\b((?:[1-3]\\s*)?[\\p{L}]+)\\s+(?:${VERSE_PATTERN})?\\s*(\\d+)\\b(?![:\\d])`, "giu")
+    const singleChapterRegex = new RegExp(`\\b((?:[1-3]\\s*)?[\\p{L}]+)\\s+(?:${VERSE_PATTERN})?\\s*(\\d+)\\b(?![:\\d]|[\\s,.]+(?:(?:${VERSE_PATTERN}|vs\\.?)\\s+)?\\d)`, "giu")
     normalized = normalized.replace(singleChapterRegex, (match, book, num) => {
         if (isSingleChapterBook(book, cacheData)) {
             return `${book} 1:${num}`

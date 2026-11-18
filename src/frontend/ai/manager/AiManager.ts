@@ -24,18 +24,18 @@ export class AiManager {
         const searchId = ++this.latestSearchId
         const isCancelled = () => searchId !== this.latestSearchId
 
-        const exact = chunk.finalizedOverlap === undefined ? [] : await this.finalReferenceDetection(chunk.chunkWithOverlap, chunk.finalizedOverlap)
-        const stringMatch = isCancelled() ? null : await this.stringDetection(chunk.chunkWithOverlap, isCancelled)
+        const references = chunk.finalizedOverlap === undefined ? [] : await this.finalReferenceDetection(chunk.chunkWithOverlap, chunk.finalizedOverlap)
+        for (const match of references) this.newMatch(match)
+        if (references.length) this.lastMatch = Date.now()
+        if (isCancelled() || (references.length > 0 && references.every((match) => match.confidence <= 50))) return
 
-        // Exact final references survive later transcript events. Route the
-        // most recent result to auto-present and keep the rest as suggestions.
-        const fallback = !isCancelled() && stringMatch && !exact.some((match) => match.content === stringMatch.content) ? stringMatch : null
-        exact.forEach((match, i) => this.newMatch(match, !isCancelled() && !fallback && i === exact.length - 1))
-        if (exact.length) this.lastMatch = Date.now()
+        const stringMatch = await this.stringDetection(chunk.chunkWithOverlap, isCancelled)
         if (isCancelled()) return
-
-        if (fallback) {
-            this.newMatch(fallback)
+        // Keep follow-on verses and phonetic suggestions after a complete
+        // reference. A content match inferred from the same words is redundant.
+        if (references.length && (!stringMatch || stringMatch.scriptureMatchType === "content" || references.some((match) => match.content === stringMatch.content))) return
+        if (stringMatch) {
+            this.newMatch(stringMatch)
             this.lastMatch = Date.now()
             return
         }
@@ -137,7 +137,10 @@ export class AiManager {
 
     /////
 
-    static newMatch(match: MatchResult, allowAutoPlay = true) {
+    private static autoPresentation = Promise.resolve()
+    private static pendingPresentations = new Set<string>()
+
+    static newMatch(match: MatchResult) {
         if (match.type === "empty" || !match.content) return
         if (match.type === "scripture" && AiManager.liveContent === match.content) return
 
@@ -154,16 +157,28 @@ export class AiManager {
         const trigger = () => this.triggerMatchAction(match)
         const action = match.type === "scripture_version" ? "open_scripture" : "present"
         const suggestion = { ...suggestionDraft, action, trigger }
-        const autoPlay = allowAutoPlay && this.shouldAutoPlay(match)
+        const key = JSON.stringify([match.scriptureTranslation, match.content])
+        if (this.pendingPresentations.has(key)) return
+        const autoPlay = this.shouldAutoPlay(match, true)
         this.addSuggestion(suggestion)
 
-        if (autoPlay) {
-            this.triggerMatchAction(match, () => {
+        if (!autoPlay) return
+        this.pendingPresentations.add(key)
+        // The Scripture drawer resolves one request at a time. Wait for its
+        // result before sending another verse from the same speech segment.
+        this.autoPresentation = this.autoPresentation
+            .then(async () => {
+                if (this.liveContent === match.content || !this.shouldAutoPlay(match, false)) return
+                if (!(await this.triggerMatchAction(match))) return
                 const presented = { ...suggestion, action: "presented", trigger: undefined }
                 aiSuggestions.update((list) => list.map((item) => (item.id === suggestion.id ? presented : item)))
                 if (get(aiSmartAction)?.id === suggestion.id) this.setSmartAction(presented)
             })
-        }
+            .catch((error) => console.error("Could not present detected scripture:", error))
+            .finally(() => {
+                this.pendingPresentations.delete(key)
+            })
+
     }
 
     private static alreadySuggested(match: MatchResult): boolean {
@@ -177,8 +192,8 @@ export class AiManager {
     }
 
     private static MAX_AUTO_PLAY_INTERVAL = 30000
-    private static shouldAutoPlay(match: MatchResult): boolean {
-        if (match.confidence <= 95 && this.alreadySuggested(match)) return false
+    private static shouldAutoPlay(match: MatchResult, checkSuggestions: boolean): boolean {
+        if (checkSuggestions && match.confidence <= 95 && this.alreadySuggested(match)) return false
 
         if (match.type === "scripture_version") return false
         if (match.type !== "scripture") return false // WIP currently only auto-plays scripture matches
@@ -208,16 +223,28 @@ export class AiManager {
     }
 
     static liveContent: string = ""
-    private static triggerMatchAction(match: MatchResult, onPresented?: () => void) {
+    private static async triggerMatchAction(match: MatchResult) {
         if (match.type === "scripture_version") {
             if (match.scriptureTranslation) setActiveScripture(match.scriptureTranslation)
-        } else if (match.type === "scripture") {
-            startScripture({ id: match.scriptureTranslation, reference: match.content }, () => {
-                this.liveContent = match.content
-                this.lastOutputUpdate = 0
-                onPresented?.()
-            }).catch((error) => console.error("Could not present detected scripture:", error))
+            return false
         }
+        if (match.type !== "scripture") return false
+
+        return new Promise<boolean>((resolve) => {
+            const timeout = setTimeout(() => resolve(false), 5000)
+            startScripture({ id: match.scriptureTranslation, reference: match.content }, (presented) => {
+                clearTimeout(timeout)
+                if (presented) {
+                    this.liveContent = match.content
+                    this.lastOutputUpdate = 0
+                }
+                resolve(presented)
+            }).catch((error) => {
+                clearTimeout(timeout)
+                console.error("Could not present detected scripture:", error)
+                resolve(false)
+            })
+        })
     }
 
     /////

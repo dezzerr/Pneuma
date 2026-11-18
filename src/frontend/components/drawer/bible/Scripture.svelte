@@ -452,15 +452,22 @@
 
         resetContentSearch()
 
-        if (request.play && !request.onPresented) playWhenLoaded = true
+        if (request.play && !request.onPresentationComplete) playWhenLoaded = true
 
         let verses = request.verses
         if (!Array.isArray(verses)) verses = [[1]]
         if (!Array.isArray(verses[0])) verses = [verses]
 
         openScripture.set(null)
-        const opened = await openBook(Number(request.book), [request.chapter], verses)
-        if (opened && request.play && request.onPresented && await playScripture()) request.onPresented()
+        let presented = false
+        try {
+            const opened = await openBook(Number(request.book), [request.chapter], verses)
+            if (opened && request.play && request.onPresentationComplete) presented = Boolean(await playScripture())
+        } catch (error) {
+            console.error("Could not open scripture reference:", error)
+        } finally {
+            request.onPresentationComplete?.(presented)
+        }
     }
 
     /// HISTORY ///

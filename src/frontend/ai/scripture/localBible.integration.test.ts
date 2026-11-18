@@ -25,6 +25,13 @@ describe.skipIf(!process.env.PNEUMA_TEST_BIBLE)("installed local Bible integrati
         vi.mocked(loadJsonBible).mockResolvedValue({ data: bible } as any)
         const detector = await BibleCacheManager.getCache("local")
         expect(detector).not.toBeNull()
+        expect(detector!.findFinalReferences("Zephaniah 1 verse 1 Zechariah chapter 1 verse 1 Philippians 2 verse 1 Philemon 1 verse 2 second Thessalonians 1 verse 2 Obadiah 1 verse 1 Ezekiel 1 verse 2", "").map((match) => match.content)).toEqual([
+            "Zephaniah 1:1", "Zechariah 1:1", "Philippians 2:1", "Philemon 1:2", "2 Thessalonians 1:2", "Obadiah 1:1", "Ezekiel 1:2"
+        ])
+        expect(detector!.findFinalReferences("Galatians 3 verse 1 Timothy 1 verse 1", "Galatians 3 verse 1")).toEqual([
+            { type: "scripture", content: "1 Timothy 1:1", confidence: 50 },
+            { type: "scripture", content: "2 Timothy 1:1", confidence: 50 }
+        ])
         expect(await detector!.search("the verticals chapter 5 verse 8. Leviticus chapter 1 verse 2.", "")).toMatchObject({ content: "Leviticus 1:2", confidence: 98 })
         expect(await detector!.search("Genesis 1 vs 2", "")).toMatchObject({ content: "Genesis 1:2", confidence: 98 })
         expect(await detector!.search("Haba cook, chapter 5, verse 2", "")).toBeNull()

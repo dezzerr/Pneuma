@@ -29,21 +29,24 @@ export class BibleSearchDetector {
         const regex = new RegExp(this.cacheData.refRegex.source, "giu")
         for (const refMatch of cleanInput.matchAll(regex)) {
             if (includeChapterOnly && cleanInput.length - (refMatch.index + refMatch[0].length) > 120) continue
-            const book = normalizeBookName(refMatch[1]).toLowerCase()
+            const book = normalizeBookName(refMatch[1]).toLowerCase().replace(/\s+/g, " ")
             const chapter = Number(refMatch[2])
             const start = Number(refMatch[3])
             const end = Number(refMatch[4])
-            const chapterData = this.cacheData.referenceIndex.get(`${book} ${chapter}`)
-            if (!chapterData?.verseCount) continue
+            const variants = includeChapterOnly ? undefined : this.cacheData.ambiguousBooks?.get(book)
+            for (const name of variants || [book]) {
+                const chapterData = this.cacheData.referenceIndex.get(`${name} ${chapter}`)
+                if (!chapterData?.verseCount) continue
 
-            if (!refMatch[3]) {
-                if (includeChapterOnly) yield { type: "scripture", content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`, confidence: 50 }
-                continue
+                if (!refMatch[3]) {
+                    if (includeChapterOnly) yield { type: "scripture", content: `${chapterData.bookName} ${chapterData.chapterNumber}:1`, confidence: 50 }
+                    continue
+                }
+                if (start < 1 || start > chapterData.verseCount || (end && end > chapterData.verseCount)) continue
+
+                const reference = `${chapterData.bookName} ${chapterData.chapterNumber}:${start}`
+                yield { type: "scripture", content: end > start ? `${reference}-${end}` : reference, confidence: variants ? 50 : 98 }
             }
-            if (start < 1 || start > chapterData.verseCount || (end && end > chapterData.verseCount)) continue
-
-            const reference = `${chapterData.bookName} ${chapterData.chapterNumber}:${start}`
-            yield { type: "scripture", content: end > start ? `${reference}-${end}` : reference, confidence: 98 }
         }
     }
 
